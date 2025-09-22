@@ -81,14 +81,59 @@ class IGDBClient {
   }
 
   async searchGames(query: string, limit: number = 20): Promise<IGDBGame[]> {
-    const igdbQuery = `
-      search "${query}";
-      fields name, summary, cover.url, first_release_date, rating, platforms.name, genres.name, screenshots.url;
-      limit ${limit};
-      where category = 0;
-    `;
+    // Try multiple search approaches to maximize results
+    const searchApproaches = [
+      // Approach 1: Full text search without category filter  
+      `search "${query}"; fields name, summary, cover.url, first_release_date, rating, platforms.name, genres.name, screenshots.url; limit ${limit};`,
+      
+      // Approach 2: Full text search with category filter
+      `search "${query}"; fields name, summary, cover.url, first_release_date, rating, platforms.name, genres.name, screenshots.url; where category = 0; limit ${limit};`,
+      
+      // Approach 3: Case-insensitive name matching without category
+      `fields name, summary, cover.url, first_release_date, rating, platforms.name, genres.name, screenshots.url; where name ~= "${query}"; limit ${limit};`,
+      
+      // Approach 4: Partial name matching without category
+      `fields name, summary, cover.url, first_release_date, rating, platforms.name, genres.name, screenshots.url; where name ~ *"${query}"*; sort rating desc; limit ${limit};`
+    ];
 
-    return this.makeRequest('games', igdbQuery);
+    for (let i = 0; i < searchApproaches.length; i++) {
+      try {
+        console.log(`IGDB trying approach ${i + 1} for "${query}"`);
+        const results = await this.makeRequest('games', searchApproaches[i]);
+        if (results.length > 0) {
+          console.log(`IGDB search approach ${i + 1} found ${results.length} results for "${query}"`);
+          return results;
+        }
+      } catch (error) {
+        console.warn(`IGDB search approach ${i + 1} failed for "${query}":`, error);
+      }
+    }
+
+    // If no full-phrase results, try individual words without category filter
+    const words = query.toLowerCase().split(' ').filter(word => word.length > 2);
+    for (const word of words) {
+      try {
+        console.log(`IGDB trying word search for: "${word}"`);
+        const wordQuery = `fields name, summary, cover.url, first_release_date, rating, platforms.name, genres.name, screenshots.url; where name ~ *"${word}"*; sort rating desc; limit ${limit};`;
+        const wordResults = await this.makeRequest('games', wordQuery);
+        
+        if (wordResults.length > 0) {
+          console.log(`IGDB word search for "${word}" found ${wordResults.length} results`);
+          
+          // Filter to prefer games containing multiple query words
+          const filteredResults = wordResults.filter(game => 
+            words.filter(w => game.name.toLowerCase().includes(w)).length >= Math.min(2, words.length)
+          );
+          
+          return filteredResults.length > 0 ? filteredResults : wordResults.slice(0, limit);
+        }
+      } catch (error) {
+        console.warn(`IGDB word search failed for "${word}":`, error);
+      }
+    }
+
+    console.log(`IGDB search found no results for "${query}"`);
+    return [];
   }
 
   async getGameById(id: number): Promise<IGDBGame | null> {
