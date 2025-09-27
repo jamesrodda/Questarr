@@ -61,7 +61,7 @@ export default function Dashboard({}: DashboardProps) {
 
   const { data: games = [], isLoading } = useQuery<Game[]>(getQueryConfig());
 
-  // Status update mutation
+  // Status update mutation (for existing games in collection)
   const statusMutation = useMutation({
     mutationFn: async ({ gameId, status }: { gameId: string; status: GameStatus }) => {
       const response = await fetch(`/api/games/${gameId}/status`, {
@@ -74,10 +74,35 @@ export default function Dashboard({}: DashboardProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/games'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/games/discover'] });
       toast({ description: "Game status updated successfully" });
     },
     onError: () => {
       toast({ description: "Failed to update game status", variant: "destructive" });
+    }
+  });
+
+  // Add game mutation (for Discovery games)
+  const addGameMutation = useMutation({
+    mutationFn: async ({ game, status }: { game: Game; status: GameStatus }) => {
+      const response = await fetch('/api/games', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          ...game,
+          status // Set the desired status when adding
+        })
+      });
+      if (!response.ok) throw new Error('Failed to add game');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/games'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/games/discover'] });
+      toast({ description: "Game added to collection successfully" });
+    },
+    onError: () => {
+      toast({ description: "Failed to add game to collection", variant: "destructive" });
     }
   });
 
@@ -146,7 +171,18 @@ export default function Dashboard({}: DashboardProps) {
   };
 
   const handleStatusChange = (gameId: string, newStatus: GameStatus) => {
-    statusMutation.mutate({ gameId, status: newStatus });
+    // Check if we're on the Discovery tab and this is an IGDB game
+    if (activeSection === "/discover" && gameId.startsWith("igdb-")) {
+      // Find the game in the current list (Discovery games)
+      const game = games.find(g => g.id === gameId);
+      if (game) {
+        // Add the IGDB game to collection with the desired status
+        addGameMutation.mutate({ game, status: newStatus });
+      }
+    } else {
+      // Update status of existing game in collection
+      statusMutation.mutate({ gameId, status: newStatus });
+    }
   };
 
   const handleViewDetails = (gameId: string) => {

@@ -228,7 +228,7 @@ class IGDBClient {
     const mappedPlatforms = platforms.slice(0, 3).map(platform => 
       platformMap[platform] || platform.split(' ')[0] // Use first word if no mapping
     );
-    const uniquePlatforms = [...new Set(mappedPlatforms)];
+    const uniquePlatforms = Array.from(new Set(mappedPlatforms));
     
     const platformConditions = uniquePlatforms.map(platform => 
       `platforms.name ~ *"${platform}"*`
