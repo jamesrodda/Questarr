@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Download, Info, Star, Calendar } from "lucide-react";
 import StatusBadge, { type GameStatus } from "./StatusBadge";
 import { type Game } from "@shared/schema";
+import { useState } from "react";
+import GameDetailsModal from "./GameDetailsModal";
 
 interface GameCardProps {
   game: Game;
@@ -11,6 +13,8 @@ interface GameCardProps {
 }
 
 export default function GameCard({ game, onStatusChange, onViewDetails }: GameCardProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   const handleStatusClick = () => {
     console.log(`Status change triggered for game: ${game.title}`);
     const nextStatus: GameStatus = game.status === "wanted" ? "owned" : 
@@ -20,6 +24,7 @@ export default function GameCard({ game, onStatusChange, onViewDetails }: GameCa
 
   const handleDetailsClick = () => {
     console.log(`View details triggered for game: ${game.title}`);
+    setDetailsOpen(true);
     onViewDetails?.(game.id);
   };
 
@@ -89,6 +94,13 @@ export default function GameCard({ game, onStatusChange, onViewDetails }: GameCa
           Mark as {game.status === "wanted" ? "Owned" : game.status === "owned" ? "Completed" : "Wanted"}
         </Button>
       </CardContent>
+      
+      <GameDetailsModal
+        game={game}
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        onStatusChange={onStatusChange}
+      />
     </Card>
   );
 }
