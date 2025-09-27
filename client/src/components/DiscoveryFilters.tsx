@@ -50,7 +50,7 @@ export default function DiscoveryFilters({ onFiltersChange }: DiscoveryFiltersPr
           data-testid="button-toggle-filters"
         >
           <Filter className="w-4 h-4" />
-          Filters {hasActiveFilters && `(${releaseStatus !== "all" ? 1 : 0 + (minYear ? 1 : 0)})`}
+          Filters {hasActiveFilters && `(${(releaseStatus !== "all" ? 1 : 0) + (minYear ? 1 : 0)})`}
         </Button>
         
         {hasActiveFilters && (
