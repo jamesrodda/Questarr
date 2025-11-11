@@ -1,5 +1,5 @@
 # Étape de base avec les dépendances partagées
-FROM node:20-alpine as base
+FROM node:20-alpine AS base
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ COPY package*.json ./
 RUN npm ci
 
 # Étape de build
-FROM base as builder
+FROM base AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ COPY . .
 RUN npm run build
 
 # Étape de production
-FROM node:20-alpine as production
+FROM node:20-alpine AS production
 
 WORKDIR /app
 
