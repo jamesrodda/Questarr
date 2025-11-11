@@ -1,9 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "client", "dist"],
+  "exclude": ["node_modules", "client", "dist", "**/*.test.ts", "**/__tests__/**"],
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": ".",
-    "noEmit": false
+    "noEmit": false,
+    "allowImportingTsExtensions": false
   }
 }
