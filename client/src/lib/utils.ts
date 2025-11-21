@@ -19,9 +19,18 @@ export function cn(...inputs: ClassValue[]) {
  * - completedAt: Generated server-side
  */
 export function mapGameToInsertGame(game: Game): InsertGame {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id, isReleased, addedAt, completedAt, releaseYear, ...rest } = game;
-  // Remove inCollection if it exists (it's not in the Game type but may be added by client code)
-  const { inCollection, ...insertData } = rest as typeof rest & { inCollection?: boolean };
-  return insertData as InsertGame;
+  // Pick only the fields that are part of InsertGame schema
+  const insertData: InsertGame = {
+    igdbId: game.igdbId,
+    title: game.title,
+    summary: game.summary,
+    coverUrl: game.coverUrl,
+    releaseDate: game.releaseDate,
+    rating: game.rating,
+    platforms: game.platforms,
+    genres: game.genres,
+    screenshots: game.screenshots,
+    status: game.status,
+  };
+  return insertData;
 }
