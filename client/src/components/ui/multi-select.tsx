@@ -30,6 +30,8 @@ interface MultiSelectProps {
   emptyMessage?: string;
   className?: string;
   disabled?: boolean;
+  // Support additional HTML attributes like data-testid
+  [key: string]: any;
 }
 
 export function MultiSelect({
@@ -40,6 +42,7 @@ export function MultiSelect({
   emptyMessage = "No items found.",
   className,
   disabled = false,
+  ...rest
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -63,6 +66,7 @@ export function MultiSelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          {...rest}
           variant="outline"
           role="combobox"
           aria-expanded={open}
@@ -75,14 +79,20 @@ export function MultiSelect({
                 <Badge
                   variant="secondary"
                   key={option.value}
-                  className="mr-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemove(option.value);
-                  }}
+                  className="flex items-center"
                 >
                   {option.label}
-                  <X className="ml-1 h-3 w-3 cursor-pointer" />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemove(option.value);
+                    }}
+                    aria-label={`Remove ${option.label}`}
+                    className="ml-1 rounded hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <X className="h-3 w-3 cursor-pointer" />
+                  </button>
                 </Badge>
               ))
             ) : (
@@ -92,7 +102,7 @@ export function MultiSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
         <Command>
           <CommandInput placeholder="Search..." />
           <CommandList>
@@ -103,7 +113,7 @@ export function MultiSelect({
                 return (
                   <CommandItem
                     key={option.value}
-                    value={option.value}
+                    value={`${option.label} ${option.value}`}
                     onSelect={() => handleToggle(option.value)}
                   >
                     <Check
