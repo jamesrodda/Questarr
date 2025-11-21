@@ -108,7 +108,22 @@ export default function DownloadsPage() {
   // Show toast notifications for downloader errors
   // Only show each error once per session to avoid spam
   useEffect(() => {
-    if (errors.length > 0) {
+    // Remove resolved errors from tracking
+    if (errors.length === 0) {
+      setHasShownErrors(new Set());
+    } else {
+      const currentErrorKeys = new Set(errors.map(e => `${e.downloaderId}-${e.error}`));
+      setHasShownErrors(prev => {
+        const newSet = new Set(prev);
+        for (const key of prev) {
+          if (!currentErrorKeys.has(key)) {
+            newSet.delete(key);
+          }
+        }
+        return newSet;
+      });
+      
+      // Show new errors
       errors.forEach((error) => {
         const errorKey = `${error.downloaderId}-${error.error}`;
         if (!hasShownErrors.has(errorKey)) {
@@ -125,7 +140,7 @@ export default function DownloadsPage() {
         }
       });
     }
-  }, [errors, hasShownErrors, toast]);
+  }, [errors, toast]);
 
   const pauseMutation = useMutation({
     mutationFn: async ({ downloaderId, torrentId }: { downloaderId: string; torrentId: string }) => {

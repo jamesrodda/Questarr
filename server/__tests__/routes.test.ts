@@ -44,11 +44,6 @@ describe('/api/downloads endpoint', () => {
       updatedAt: new Date(),
     };
 
-    // Mock storage to return both downloaders
-    const mockStorage = {
-      getEnabledDownloaders: vi.fn().mockResolvedValue([testDownloader1, testDownloader2]),
-    };
-
     // Mock successful response for first downloader
     const headers1 = new Headers();
     headers1.set('X-Transmission-Session-Id', 'session-123');
