@@ -824,7 +824,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         igdb: {
           configured: !!(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET),
-          clientId: process.env.IGDB_CLIENT_ID,
+          clientId: process.env.IGDB_CLIENT_ID ? process.env.IGDB_CLIENT_ID.substring(0, 8) + '...' : undefined,
         },
         server: {
           port: parseInt(process.env.PORT || '5000', 10),
