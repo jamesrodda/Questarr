@@ -20,7 +20,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function mapGameToInsertGame(game: Game): InsertGame {
   // Pick only the fields that are part of InsertGame schema
-  const insertData: InsertGame = {
+  return {
     igdbId: game.igdbId,
     title: game.title,
     summary: game.summary,
@@ -32,5 +32,4 @@ export function mapGameToInsertGame(game: Game): InsertGame {
     screenshots: game.screenshots,
     status: game.status,
   };
-  return insertData;
 }
