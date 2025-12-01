@@ -119,7 +119,7 @@ export type InsertGame = {
   platforms?: string[] | null;
   genres?: string[] | null;
   screenshots?: string[] | null;
-  status?: "wanted" | "owned" | "completed" | "downloading" | null;
+  status?: "wanted" | "owned" | "completed" | "downloading";
 };
 
 export type UpdateGameStatus = z.infer<typeof updateGameStatusSchema>;
