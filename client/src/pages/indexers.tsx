@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { asZodType } from "@/lib/utils";
 import { Plus, Edit, Trash2, Check, X, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +15,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertIndexerSchema, type Indexer, type InsertIndexer } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-select";
-import type { z } from "zod";
 
 export default function IndexersPage() {
   const { toast } = useToast();
@@ -136,7 +136,7 @@ export default function IndexersPage() {
   });
 
   const form = useForm<InsertIndexer>({
-    resolver: zodResolver(insertIndexerSchema as unknown as z.ZodType<InsertIndexer>),
+    resolver: zodResolver(asZodType<InsertIndexer>(insertIndexerSchema)),
     defaultValues: {
       name: "",
       url: "",

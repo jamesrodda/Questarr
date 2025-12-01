@@ -62,7 +62,8 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
 });
 
-// For insertGameSchema, we define it manually using plain zod to avoid zod/v4 compatibility issues
+// For insertGameSchema, we define it manually using plain zod to avoid TypeScript compatibility
+// issues with drizzle-zod 0.8.x (which uses zod/v4 types internally)
 export const insertGameSchema = z.object({
   igdbId: z.number().nullable().optional(),
   title: z.string(),
@@ -94,7 +95,8 @@ export const insertDownloaderSchema = createInsertSchema(downloaders).omit({
 });
 
 // Type definitions - using Drizzle's table inference for select types
-// and explicit interfaces for insert types to avoid zod/v4 compatibility issues
+// and explicit interfaces for insert types to avoid TypeScript compatibility
+// issues with drizzle-zod 0.8.x (which uses zod/v4 types internally)
 export type User = typeof users.$inferSelect;
 export type InsertUser = {
   username: string;
