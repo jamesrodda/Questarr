@@ -111,4 +111,48 @@ describe('IGDBClient - Fallback Mechanism', () => {
     // Verify the results are empty
     expect(results).toHaveLength(0);
   });
+
+  it('should cap total search attempts at MAX_SEARCH_ATTEMPTS (5)', async () => {
+    // Mock environment variables
+    process.env.IGDB_CLIENT_ID = 'test-client-id';
+    process.env.IGDB_CLIENT_SECRET = 'test-client-secret';
+
+    // Mock authentication response
+    const authResponse = {
+      ok: true,
+      json: async () => ({
+        access_token: 'test-token',
+        expires_in: 3600,
+        token_type: 'bearer',
+      }),
+    };
+
+    // Mock empty responses for all attempts
+    const emptyResponse = {
+      ok: true,
+      json: async () => [],
+    };
+
+    // Setup fetch mock - auth + all empty search attempts
+    fetchMock
+      .mockResolvedValueOnce(authResponse) // Auth call
+      .mockResolvedValue(emptyResponse); // All search attempts return empty
+
+    // Import the IGDBClient
+    const { igdbClient } = await import('../igdb.js');
+
+    // Use a query with many words to verify the cap works
+    // Without the cap, this would try: 4 approaches + 6 word searches = 10 attempts
+    const results = await igdbClient.searchGames('word one two three four five six', 20);
+
+    // The cap is 5 attempts. The auth token is cached from previous tests so
+    // the fetch calls are: either 1 auth + 5 searches = 6, or just 5 searches if auth is cached
+    // What matters is that we don't exceed 5 search attempts
+    // The logs show: approach 1, 2, 3, 4, word search "word" = 5 attempts
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(6);
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(5);
+
+    // Verify the results are empty
+    expect(results).toHaveLength(0);
+  });
 });
