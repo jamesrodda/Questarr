@@ -42,6 +42,28 @@ describe('Config Module', () => {
     });
   });
 
+  describe('when PORT is invalid', () => {
+    it('should call process.exit(1) for non-numeric PORT', async () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/testdb';
+      process.env.PORT = 'invalid';
+      
+      // Mock process.exit to prevent tests from exiting, but throw to stop execution
+      const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`process.exit called with code ${code}`);
+      });
+      
+      // Spy on console.error to verify error message
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      
+      // Import the config module - this should trigger validation and throw
+      await expect(import('../config.js')).rejects.toThrow('process.exit called with code 1');
+      
+      expect(mockProcessExit).toHaveBeenCalledWith(1);
+      
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
   describe('when DATABASE_URL is set', () => {
     it('should export valid config with defaults', async () => {
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/testdb';

@@ -13,7 +13,10 @@ const envSchema = z.object({
   IGDB_CLIENT_SECRET: z.string().optional(),
 
   // Server configuration
-  PORT: z.string().default("5000").transform((val) => parseInt(val, 10)),
+  PORT: z.string().default("5000").refine(
+    (val) => !isNaN(parseInt(val, 10)) && parseInt(val, 10) > 0,
+    { message: "PORT must be a valid positive integer" }
+  ).transform((val) => parseInt(val, 10)),
   HOST: z.string().default("localhost"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
