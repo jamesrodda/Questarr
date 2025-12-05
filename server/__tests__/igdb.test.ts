@@ -5,11 +5,19 @@ describe('IGDBClient - Fallback Mechanism', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    // Reset mocks before each test
+    // Reset mocks and modules before each test to ensure fresh IGDBClient instance
     vi.clearAllMocks();
+    vi.resetModules();
     fetchMock = vi.fn();
     global.fetch = fetchMock;
   });
+
+  // Helper function to count IGDB API search calls (excluding auth calls)
+  function countIgdbSearchCalls(mockCalls: any[]): number {
+    return mockCalls.filter(call => 
+      typeof call[0] === 'string' && call[0].includes('api.igdb.com/v4/games')
+    ).length;
+  }
 
   it('should try multiple search approaches when first approach returns no results', async () => {
     // Mock environment variables
@@ -138,19 +146,18 @@ describe('IGDBClient - Fallback Mechanism', () => {
       .mockResolvedValueOnce(authResponse) // Auth call
       .mockResolvedValue(emptyResponse); // All search attempts return empty
 
-    // Import the IGDBClient
+    // Import the IGDBClient (vi.resetModules ensures fresh instance)
     const { igdbClient } = await import('../igdb.js');
 
     // Use a query with many words to verify the cap works
     // Without the cap, this would try: 4 approaches + 6 word searches = 10 attempts
     const results = await igdbClient.searchGames('word one two three four five six', 20);
 
-    // The cap is 5 attempts. The auth token is cached from previous tests so
-    // the fetch calls are: either 1 auth + 5 searches = 6, or just 5 searches if auth is cached
-    // What matters is that we don't exceed 5 search attempts
-    // The logs show: approach 1, 2, 3, 4, word search "word" = 5 attempts
-    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(6);
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(5);
+    // Count only IGDB API search calls (excluding auth calls to Twitch)
+    const igdbSearchCalls = countIgdbSearchCalls(fetchMock.mock.calls);
+    
+    // Verify exactly 5 search attempts were made (the MAX_SEARCH_ATTEMPTS cap)
+    expect(igdbSearchCalls).toBe(5);
 
     // Verify the results are empty
     expect(results).toHaveLength(0);
