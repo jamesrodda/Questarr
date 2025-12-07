@@ -22,7 +22,6 @@ import { Progress } from "@/components/ui/progress";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { formatBytes } from "@/lib/utils";
 import TorrentDetailsModal from "@/components/TorrentDetailsModal";
 
 interface DownloadStatus {
@@ -54,20 +53,6 @@ interface DownloadsResponse {
   errors: DownloaderError[];
 }
 
-function formatSpeed(bytesPerSecond: number): string {
-  return formatBytes(bytesPerSecond) + "/s";
-}
-
-function formatETA(seconds: number): string {
-  if (seconds <= 0) return "∞";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
-}
-
 function getStatusColor(status: DownloadStatus['status']): string {
   switch (status) {
     case 'downloading':
@@ -85,23 +70,7 @@ function getStatusColor(status: DownloadStatus['status']): string {
   }
 }
 
-function getStatusBadgeVariant(status: DownloadStatus['status']): "default" | "secondary" | "destructive" | "outline" {
-  switch (status) {
-    case 'downloading':
-    case 'seeding':
-      return 'default';
-    case 'completed':
-      return 'outline';
-    case 'paused':
-      return 'secondary';
-    case 'error':
-      return 'destructive';
-    default:
-      return 'outline';
-  }
-}
-
-export default function DownloadsPage() {
+export default function Downloads() {
   const { toast } = useToast();
   const [hasShownErrors, setHasShownErrors] = useState<Set<string>>(new Set());
   const [selectedTorrent, setSelectedTorrent] = useState<DownloadStatus | null>(null);
