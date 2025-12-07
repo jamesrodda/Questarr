@@ -13,7 +13,7 @@ import {
   shouldShowPeersBadge,
   type DownloadData,
   type DownloadStatusType,
-} from '../../client/src/lib/downloads-utils';
+} from '../src/lib/downloads-utils';
 
 describe('formatBytes', () => {
   it('should return "0 B" for 0 bytes', () => {

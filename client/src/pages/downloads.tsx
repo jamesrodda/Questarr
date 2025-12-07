@@ -215,7 +215,12 @@ export default function DownloadsPage() {
       </div>
 
       {/* Status filter tabs */}
-      <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as DownloadStatusType | 'all')} className="mb-6">
+      <Tabs
+        value={statusFilter}
+        onValueChange={(value) => setStatusFilter(value as DownloadStatusType | 'all')}
+        className="mb-6"
+        aria-label="Filter downloads by status"
+      >
         <TabsList data-testid="filter-tabs">
           <TabsTrigger value="all" data-testid="filter-all">All</TabsTrigger>
           <TabsTrigger value="downloading" data-testid="filter-downloading">Downloading</TabsTrigger>
@@ -268,8 +273,8 @@ export default function DownloadsPage() {
                           </Badge>
                         )}
                         {shouldShowRatioBadge(download.ratio) && (
-                          <Badge variant="outline" data-testid={`badge-ratio-${download.id}`} aria-label={`Share ratio: ${download.ratio!.toFixed(2)}`}>
-                            Ratio: {download.ratio!.toFixed(2)}
+                          <Badge variant="outline" data-testid={`badge-ratio-${download.id}`} aria-label={`Share ratio: ${download.ratio?.toFixed(2) ?? '0.00'}`}>
+                            Ratio: {download.ratio?.toFixed(2) ?? '0.00'}
                           </Badge>
                         )}
                       </div>
@@ -344,7 +349,12 @@ export default function DownloadsPage() {
           <Card data-testid="card-no-downloads">
             <CardHeader>
               <CardTitle data-testid="text-no-downloads-title">
-                {downloads.length === 0 ? "No Active Downloads" : `No ${statusFilter === 'all' ? '' : statusFilter + ' '}Downloads`}
+                {downloads.length === 0
+                  ? "No Active Downloads"
+                  : `No ${statusFilter === 'all'
+                      ? 'Active'
+                      : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)
+                    } Downloads`}
               </CardTitle>
               <CardDescription data-testid="text-no-downloads-description">
                 {downloads.length === 0 
