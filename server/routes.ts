@@ -92,7 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await igdbClient.getPopularGames(1);
       health.igdb = true;
     } catch (error) {
-      routesLogger.error({ error }, "IGDB health check failed");
+      routesLogger.error({ error }, "igdb health check failed");
       health.ok = false;
     }
 
@@ -775,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           allTorrents.push(...torrentsWithDownloader);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          routesLogger.error({ downloaderName: downloader.name, error }, `error getting torrents from ${downloader.name}`);
+          routesLogger.error({ downloaderName: downloader.name, error }, "error getting torrents");
           errors.push({
             downloaderId: downloader.id,
             downloaderName: downloader.name,
