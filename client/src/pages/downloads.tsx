@@ -1,12 +1,26 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { 
+  formatBytes, 
+  formatSpeed, 
+  formatETA, 
+  getStatusBadgeVariant, 
+  filterDownloadsByStatus,
+  shouldShowSpeedBadge,
+  shouldShowETABadge,
+  shouldShowRatioBadge,
+  shouldShowSizeBadge,
+  shouldShowPeersBadge,
+  type DownloadStatusType,
+} from "@/lib/downloads-utils";
 import { Play, Pause, Trash2, MoreHorizontal, RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatBytes } from "@/lib/utils";
 import TorrentDetailsModal from "@/components/TorrentDetailsModal";
@@ -14,7 +28,7 @@ import TorrentDetailsModal from "@/components/TorrentDetailsModal";
 interface DownloadStatus {
   id: string;
   name: string;
-  status: 'downloading' | 'seeding' | 'completed' | 'paused' | 'error';
+  status: DownloadStatusType;
   progress: number; // 0-100
   downloadSpeed?: number; // bytes per second
   uploadSpeed?: number; // bytes per second
@@ -92,6 +106,7 @@ export default function DownloadsPage() {
   const [hasShownErrors, setHasShownErrors] = useState<Set<string>>(new Set());
   const [selectedTorrent, setSelectedTorrent] = useState<DownloadStatus | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<DownloadStatusType | 'all'>('all');
 
   const { data: downloadsData, isLoading, refetch } = useQuery<DownloadsResponse>({
     queryKey: ["/api/downloads"],
@@ -100,6 +115,9 @@ export default function DownloadsPage() {
 
   const downloads = downloadsData?.torrents || [];
   const errors = downloadsData?.errors || [];
+  
+  // Filter downloads based on selected status using utility function
+  const filteredDownloads = filterDownloadsByStatus(downloads, statusFilter);
 
   // Show toast notifications for downloader errors
   // Only show each error once per session to avoid spam
@@ -252,9 +270,26 @@ export default function DownloadsPage() {
         </Button>
       </div>
 
+      {/* Status filter tabs */}
+      <Tabs
+        value={statusFilter}
+        onValueChange={(value) => setStatusFilter(value as DownloadStatusType | 'all')}
+        className="mb-6"
+        aria-label="Filter downloads by status"
+      >
+        <TabsList data-testid="filter-tabs">
+          <TabsTrigger value="all" data-testid="filter-all">All</TabsTrigger>
+          <TabsTrigger value="downloading" data-testid="filter-downloading">Downloading</TabsTrigger>
+          <TabsTrigger value="seeding" data-testid="filter-seeding">Seeding</TabsTrigger>
+          <TabsTrigger value="completed" data-testid="filter-completed">Completed</TabsTrigger>
+          <TabsTrigger value="paused" data-testid="filter-paused">Paused</TabsTrigger>
+          <TabsTrigger value="error" data-testid="filter-error">Error</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div className="grid gap-4">
-        {downloads.length > 0 ? (
-          downloads.map((download) => (
+        {filteredDownloads.length > 0 ? (
+          filteredDownloads.map((download) => (
             <Card key={`${download.downloaderId}-${download.id}`} data-testid={`card-download-${download.id}`}>
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -262,40 +297,40 @@ export default function DownloadsPage() {
                     <CardTitle className="text-lg leading-tight">{download.name}</CardTitle>
                     <CardDescription className="mt-2">
                       <div className="flex flex-wrap gap-2 items-center">
-                        <Badge variant={getStatusBadgeVariant(download.status)} className="capitalize" data-testid={`badge-status-${download.id}`}>
+                        <Badge variant={getStatusBadgeVariant(download.status)} className="capitalize" data-testid={`badge-status-${download.id}`} aria-label={`Status: ${download.status}`}>
                           {download.status}
                         </Badge>
-                        <Badge variant="outline" className="capitalize" data-testid={`badge-downloader-${download.id}`}>
+                        <Badge variant="outline" className="capitalize" data-testid={`badge-downloader-${download.id}`} aria-label={`Downloader: ${download.downloaderName}`}>
                           {download.downloaderName}
                         </Badge>
-                        {download.size && (
-                          <Badge variant="outline" data-testid={`badge-size-${download.id}`}>
-                            {formatBytes(download.downloaded || 0)} / {formatBytes(download.size)}
+                        {shouldShowSizeBadge(download.size) && (
+                          <Badge variant="outline" data-testid={`badge-size-${download.id}`} aria-label={`Downloaded ${formatBytes(download.downloaded || 0)} of ${formatBytes(download.size!)}`}>
+                            {formatBytes(download.downloaded || 0)} / {formatBytes(download.size!)}
                           </Badge>
                         )}
-                        {download.downloadSpeed && download.downloadSpeed > 0 && (
-                          <Badge variant="outline" data-testid={`badge-download-speed-${download.id}`}>
-                            ↓ {formatSpeed(download.downloadSpeed)}
+                        {shouldShowSpeedBadge(download.downloadSpeed) && (
+                          <Badge variant="outline" data-testid={`badge-download-speed-${download.id}`} aria-label={`Download speed: ${formatSpeed(download.downloadSpeed!)}`}>
+                            ↓ {formatSpeed(download.downloadSpeed!)}
                           </Badge>
                         )}
-                        {download.uploadSpeed && download.uploadSpeed > 0 && (
-                          <Badge variant="outline" data-testid={`badge-upload-speed-${download.id}`}>
-                            ↑ {formatSpeed(download.uploadSpeed)}
+                        {shouldShowSpeedBadge(download.uploadSpeed) && (
+                          <Badge variant="outline" data-testid={`badge-upload-speed-${download.id}`} aria-label={`Upload speed: ${formatSpeed(download.uploadSpeed!)}`}>
+                            ↑ {formatSpeed(download.uploadSpeed!)}
                           </Badge>
                         )}
-                        {download.eta && download.eta > 0 && (
-                          <Badge variant="outline" data-testid={`badge-eta-${download.id}`}>
-                            ETA: {formatETA(download.eta)}
+                        {shouldShowETABadge(download.eta) && (
+                          <Badge variant="outline" data-testid={`badge-eta-${download.id}`} aria-label={`Estimated time remaining: ${formatETA(download.eta!)}`}>
+                            ETA: {formatETA(download.eta!)}
                           </Badge>
                         )}
-                        {download.seeders !== undefined && (
-                          <Badge variant="outline" data-testid={`badge-peers-${download.id}`}>
+                        {shouldShowPeersBadge(download.seeders) && (
+                          <Badge variant="outline" data-testid={`badge-peers-${download.id}`} aria-label={`${download.seeders} seeders, ${download.leechers || 0} leechers`}>
                             {download.seeders}↑ / {download.leechers || 0}↓
                           </Badge>
                         )}
-                        {download.ratio !== undefined && (
-                          <Badge variant="outline" data-testid={`badge-ratio-${download.id}`}>
-                            Ratio: {download.ratio.toFixed(2)}
+                        {shouldShowRatioBadge(download.ratio) && (
+                          <Badge variant="outline" data-testid={`badge-ratio-${download.id}`} aria-label={`Share ratio: ${download.ratio?.toFixed(2) ?? '0.00'}`}>
+                            Ratio: {download.ratio?.toFixed(2) ?? '0.00'}
                           </Badge>
                         )}
                       </div>
@@ -376,9 +411,18 @@ export default function DownloadsPage() {
         ) : (
           <Card data-testid="card-no-downloads">
             <CardHeader>
-              <CardTitle data-testid="text-no-downloads-title">No Active Downloads</CardTitle>
+              <CardTitle data-testid="text-no-downloads-title">
+                {downloads.length === 0
+                  ? "No Active Downloads"
+                  : `No ${statusFilter === 'all'
+                      ? 'Active'
+                      : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)
+                    } Downloads`}
+              </CardTitle>
               <CardDescription data-testid="text-no-downloads-description">
-                Use the Search page to find and download games from your configured indexers.
+                {downloads.length === 0 
+                  ? "Use the Search page to find and download games from your configured indexers."
+                  : `No downloads match the "${statusFilter}" filter. Try selecting a different filter.`}
               </CardDescription>
             </CardHeader>
           </Card>
