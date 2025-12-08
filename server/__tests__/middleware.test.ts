@@ -14,7 +14,7 @@ import {
 } from "../middleware";
 
 // Mock request and response objects
-const createMockRequest = (overrides: any = {}): Partial<Request> => ({
+const createMockRequest = (overrides: Partial<Request> = {}): Partial<Request> => ({
   query: {},
   params: {},
   body: {},
@@ -22,11 +22,11 @@ const createMockRequest = (overrides: any = {}): Partial<Request> => ({
 });
 
 const createMockResponse = (): Partial<Response> => {
-  const res: any = {
+  const res: Record<string, unknown> = {
     status: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
   };
-  return res;
+  return res as Partial<Response>;
 };
 
 const createMockNext = (): NextFunction => vi.fn();

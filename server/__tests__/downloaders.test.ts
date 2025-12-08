@@ -29,7 +29,7 @@ describe('TransmissionClient - 409 Retry Mechanism', () => {
     };
 
     // Mock the first response with 409 status and session ID header
-    const firstResponse = {
+    const _firstResponse = {
       ok: false,
       status: 409,
       statusText: 'Conflict',

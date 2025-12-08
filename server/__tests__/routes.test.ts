@@ -100,7 +100,7 @@ describe('/api/downloads endpoint', () => {
 
     // Simulate what the /api/downloads endpoint does
     const enabledDownloaders = [testDownloader1, testDownloader2];
-    const allTorrents: any[] = [];
+    const allTorrents: unknown[] = [];
     const errors: Array<{ downloaderId: string; downloaderName: string; error: string }> = [];
 
     for (const downloader of enabledDownloaders) {
@@ -197,7 +197,7 @@ describe('/api/downloads endpoint', () => {
 
     // Simulate what the /api/downloads endpoint does
     const enabledDownloaders = [testDownloader];
-    const allTorrents: any[] = [];
+    const allTorrents: unknown[] = [];
     const errors: Array<{ downloaderId: string; downloaderName: string; error: string }> = [];
 
     for (const downloader of enabledDownloaders) {

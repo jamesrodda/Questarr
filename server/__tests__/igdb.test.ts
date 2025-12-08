@@ -35,7 +35,7 @@ describe('IGDBClient - Fallback Mechanism', () => {
   });
 
   // Helper function to count IGDB API search calls (excluding auth calls)
-  function countIgdbSearchCalls(mockCalls: any[]): number {
+  function countIgdbSearchCalls(mockCalls: unknown[]): number {
     return mockCalls.filter(call => 
       typeof call[0] === 'string' && call[0].includes('api.igdb.com/v4/games')
     ).length;

@@ -38,7 +38,7 @@ async function performHealthCheck() {
   try {
     await pool.query("SELECT 1");
     health.db = true;
-  } catch (error) {
+  } catch {
     health.ok = false;
   }
 
@@ -46,7 +46,7 @@ async function performHealthCheck() {
   try {
     await igdbClient.getPopularGames(1);
     health.igdb = true;
-  } catch (error) {
+  } catch {
     health.ok = false;
   }
 
