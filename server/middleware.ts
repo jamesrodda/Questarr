@@ -219,7 +219,7 @@ export const sanitizeDownloaderData = [
     .withMessage("Name must be between 1 and 200 characters"),
   body("type")
     .trim()
-    .isIn(["qbittorrent", "transmission", "deluge"])
+    .isIn(["qbittorrent", "transmission", "rtorrent", "deluge"])
     .withMessage("Invalid downloader type"),
   body("url")
     .trim()
@@ -240,6 +240,11 @@ export const sanitizeDownloaderData = [
     .isBoolean()
     .withMessage("Enabled must be a boolean")
     .toBoolean(),
+  body("label")
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage("Label must be at most 100 characters"),
 ];
 
 // Sanitization rules for partial downloader updates (PATCH)
@@ -289,6 +294,11 @@ export const sanitizeDownloaderUpdateData = [
     .trim()
     .isLength({ max: 100 })
     .withMessage("Category must be at most 100 characters"),
+  body("label")
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage("Label must be at most 100 characters"),
 ];
 
 // Sanitization rules for torrent add requests

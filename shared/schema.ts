@@ -43,14 +43,21 @@ export const downloaders = pgTable("downloaders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   type: text("type", { enum: ["transmission", "rtorrent", "qbittorrent"] }).notNull(),
-  url: text("url").notNull(),
+  url: text("url").notNull(), // Host URL (without port for rTorrent/qBittorrent)
+  port: integer("port"), // Port number (used by rTorrent and qBittorrent)
+  useSsl: boolean("use_ssl").default(false), // Use SSL/TLS connection
+  urlPath: text("url_path"), // URL path to XMLRPC endpoint (rTorrent: typically "RPC2" or "plugins/rpc/rpc.php")
   username: text("username"),
   password: text("password"),
   enabled: boolean("enabled").notNull().default(true),
   priority: integer("priority").notNull().default(1),
   downloadPath: text("download_path"),
-  category: text("category").default("games"),
-  settings: text("settings"), // JSON string for client-specific settings
+  category: text("category").default("games"), // Category/label in the downloader
+  label: text("label").default("GameRadarr"), // Deprecated - use category instead
+  addStopped: boolean("add_stopped").default(false), // Add torrents in stopped/paused state
+  removeCompleted: boolean("remove_completed").default(false), // Remove torrents after completion
+  postImportCategory: text("post_import_category"), // Category to set after download completes
+  settings: text("settings"), // JSON string for additional client-specific settings
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -141,12 +148,19 @@ export type InsertDownloader = {
   name: string;
   type: "transmission" | "rtorrent" | "qbittorrent";
   url: string;
+  port?: number | null;
+  useSsl?: boolean | null;
+  urlPath?: string | null;
   username?: string | null;
   password?: string | null;
   enabled?: boolean;
   priority?: number;
   downloadPath?: string | null;
   category?: string | null;
+  label?: string | null;
+  addStopped?: boolean | null;
+  removeCompleted?: boolean | null;
+  postImportCategory?: string | null;
   settings?: string | null;
 };
 
