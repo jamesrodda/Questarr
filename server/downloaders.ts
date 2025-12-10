@@ -126,9 +126,19 @@ class TransmissionClient implements DownloaderClient {
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
       const _response = await this.makeRequest('session-get', {});
+      downloadersLogger.info({ url: this.downloader.url }, 'Transmission connection test successful');
       return { success: true, message: 'Connected successfully to Transmission' };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      downloadersLogger.error({ 
+        error: errorMessage, 
+        url: this.downloader.url,
+        username: this.downloader.username 
+      }, 'Transmission connection test failed');
+      
+      if (errorMessage.includes('Authentication failed')) {
+        return { success: false, message: errorMessage };
+      }
       return { success: false, message: `Failed to connect to Transmission: ${errorMessage}` };
     }
   }
@@ -424,7 +434,7 @@ class TransmissionClient implements DownloaderClient {
     }
 
     if (this.downloader.username && this.downloader.password) {
-      const auth = Buffer.from(`${this.downloader.username}:${this.downloader.password}`).toString('base64');
+      const auth = Buffer.from(`${this.downloader.username}:${this.downloader.password}`, 'latin1').toString('base64');
       headers['Authorization'] = `Basic ${auth}`;
     }
 
@@ -442,6 +452,8 @@ class TransmissionClient implements DownloaderClient {
         this.sessionId = sessionId;
         headers['X-Transmission-Session-Id'] = sessionId;
         
+        downloadersLogger.debug({ method, url }, 'Retrying Transmission request with session ID');
+        
         // Retry with session ID
         const retryResponse = await fetch(url, {
           method: 'POST',
@@ -451,6 +463,21 @@ class TransmissionClient implements DownloaderClient {
         });
 
         if (!retryResponse.ok) {
+          if (retryResponse.status === 401) {
+            downloadersLogger.error({ 
+              status: retryResponse.status, 
+              url, 
+              username: this.downloader.username,
+              method 
+            }, 'Transmission authentication failed - check username and password');
+            throw new Error('Authentication failed: Invalid username or password for Transmission');
+          }
+          downloadersLogger.error({ 
+            status: retryResponse.status, 
+            statusText: retryResponse.statusText, 
+            url, 
+            method 
+          }, 'Transmission request failed after session ID retry');
           throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`);
         }
 
@@ -459,6 +486,21 @@ class TransmissionClient implements DownloaderClient {
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        downloadersLogger.error({ 
+          status: response.status, 
+          url, 
+          username: this.downloader.username,
+          method 
+        }, 'Transmission authentication failed - check username and password');
+        throw new Error('Authentication failed: Invalid username or password for Transmission');
+      }
+      downloadersLogger.error({ 
+        status: response.status, 
+        statusText: response.statusText, 
+        url, 
+        method 
+      }, 'Transmission request failed');
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
@@ -485,10 +527,24 @@ class RTorrentClient implements DownloaderClient {
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
       // Test connection by getting rTorrent version
-      await this.makeXMLRPCRequest('system.client_version', []);
+      const version = await this.makeXMLRPCRequest('system.client_version', []);
+      downloadersLogger.info({ 
+        url: this.downloader.url, 
+        version 
+      }, 'rTorrent connection test successful');
       return { success: true, message: 'Connected successfully to rTorrent' };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      downloadersLogger.error({ 
+        error: errorMessage, 
+        url: this.downloader.url,
+        username: this.downloader.username,
+        urlPath: this.downloader.urlPath || 'RPC2'
+      }, 'rTorrent connection test failed');
+      
+      if (errorMessage.includes('Authentication failed')) {
+        return { success: false, message: errorMessage };
+      }
       return { success: false, message: `Failed to connect to rTorrent: ${errorMessage}` };
     }
   }
@@ -862,7 +918,7 @@ class RTorrentClient implements DownloaderClient {
     };
 
     if (this.downloader.username && this.downloader.password) {
-      const auth = Buffer.from(`${this.downloader.username}:${this.downloader.password}`).toString('base64');
+      const auth = Buffer.from(`${this.downloader.username}:${this.downloader.password}`, 'latin1').toString('base64');
       headers['Authorization'] = `Basic ${auth}`;
     }
 
@@ -874,6 +930,21 @@ class RTorrentClient implements DownloaderClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        downloadersLogger.error({ 
+          status: response.status, 
+          url, 
+          username: this.downloader.username,
+          method 
+        }, 'rTorrent authentication failed - verify username, password, and web server authentication configuration');
+        throw new Error('Authentication failed: Invalid credentials or web server authentication not configured for rTorrent');
+      }
+      downloadersLogger.error({ 
+        status: response.status, 
+        statusText: response.statusText, 
+        url, 
+        method 
+      }, 'rTorrent XML-RPC request failed');
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 

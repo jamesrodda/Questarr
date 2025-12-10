@@ -618,7 +618,10 @@ describe('RTorrentClient - XML-RPC Protocol', () => {
       text: async () => xmlResponse,
     };
 
-    fetchMock.mockResolvedValueOnce(successResponse);
+    // Mock both the add torrent call and the category set call
+    fetchMock
+      .mockResolvedValueOnce(successResponse) // load.start
+      .mockResolvedValueOnce(successResponse); // d.custom1.set (category)
 
     const { DownloaderManager } = await import('../downloaders.js');
 
@@ -627,7 +630,8 @@ describe('RTorrentClient - XML-RPC Protocol', () => {
       title: 'Test Game',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Expects 2 calls: 1 for add torrent, 1 for setting category
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(result.success).toBe(true);
     expect(result.id).toBe('ABC123DEF456');
     expect(result.message).toBe('Torrent added successfully');
@@ -1478,6 +1482,366 @@ describe('QBittorrentClient - Web API v2', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(result.success).toBe(true);
+  });
+});
+
+describe('Authentication - HTTP Basic Auth Encoding', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchMock = vi.fn();
+    global.fetch = fetchMock;
+  });
+
+  describe('TransmissionClient', () => {
+    it('should encode credentials with latin1 encoding for HTTP Basic Auth', async () => {
+      const testDownloader: Downloader = {
+        id: 'test-id',
+        name: 'Test Transmission',
+        type: 'transmission',
+        url: 'http://localhost:9091/transmission/rpc',
+        username: 'admin',
+        password: 'test123',
+        enabled: true,
+        priority: 1,
+        downloadPath: null,
+        category: null,
+        settings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const successResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        json: async () => ({
+          arguments: { version: '3.00' },
+          result: 'success',
+        }),
+      };
+
+      fetchMock.mockResolvedValueOnce(successResponse);
+
+      const { DownloaderManager } = await import('../downloaders.js');
+      await DownloaderManager.testDownloader(testDownloader);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const callHeaders = fetchMock.mock.calls[0][1].headers;
+      
+      // Verify Authorization header exists
+      expect(callHeaders['Authorization']).toBeDefined();
+      expect(callHeaders['Authorization']).toMatch(/^Basic /);
+      
+      // Verify the encoding matches latin1 (ISO-8859-1) standard
+      // admin:test123 in latin1 base64 = YWRtaW46dGVzdDEyMw==
+      const expectedAuth = Buffer.from('admin:test123', 'latin1').toString('base64');
+      expect(callHeaders['Authorization']).toBe(`Basic ${expectedAuth}`);
+    });
+
+    it('should handle authentication failure with 401 status', async () => {
+      const testDownloader: Downloader = {
+        id: 'test-id',
+        name: 'Test Transmission',
+        type: 'transmission',
+        url: 'http://localhost:9091/transmission/rpc',
+        username: 'admin',
+        password: 'wrongpassword',
+        enabled: true,
+        priority: 1,
+        downloadPath: null,
+        category: null,
+        settings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const unauthorizedResponse = {
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: new Headers(),
+        json: async () => ({}),
+      };
+
+      fetchMock.mockResolvedValueOnce(unauthorizedResponse);
+
+      const { DownloaderManager } = await import('../downloaders.js');
+      const result = await DownloaderManager.testDownloader(testDownloader);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Authentication failed');
+      expect(result.message).toContain('Invalid username or password');
+    });
+
+    it('should encode credentials with special characters correctly', async () => {
+      const testDownloader: Downloader = {
+        id: 'test-id',
+        name: 'Test Transmission',
+        type: 'transmission',
+        url: 'http://localhost:9091/transmission/rpc',
+        username: 'admin',
+        password: 'pàss@wörd!',
+        enabled: true,
+        priority: 1,
+        downloadPath: null,
+        category: null,
+        settings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const successResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        json: async () => ({
+          arguments: { version: '3.00' },
+          result: 'success',
+        }),
+      };
+
+      fetchMock.mockResolvedValueOnce(successResponse);
+
+      const { DownloaderManager } = await import('../downloaders.js');
+      await DownloaderManager.testDownloader(testDownloader);
+
+      const callHeaders = fetchMock.mock.calls[0][1].headers;
+      
+      // Verify latin1 encoding for special characters
+      const expectedAuth = Buffer.from('admin:pàss@wörd!', 'latin1').toString('base64');
+      expect(callHeaders['Authorization']).toBe(`Basic ${expectedAuth}`);
+      
+      // Verify it differs from UTF-8 encoding (which would be incorrect)
+      const utf8Auth = Buffer.from('admin:pàss@wörd!', 'utf8').toString('base64');
+      expect(callHeaders['Authorization']).not.toBe(`Basic ${utf8Auth}`);
+    });
+  });
+
+  describe('RTorrentClient', () => {
+    it('should encode credentials with latin1 encoding for HTTP Basic Auth', async () => {
+      const testDownloader: Downloader = {
+        id: 'test-id',
+        name: 'Test rTorrent',
+        type: 'rtorrent',
+        url: 'http://localhost:8080',
+        urlPath: 'RPC2',
+        username: 'admin',
+        password: 'test123',
+        enabled: true,
+        priority: 1,
+        downloadPath: null,
+        category: null,
+        settings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const successResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        text: async () => `<?xml version="1.0"?>
+<methodResponse>
+  <params>
+    <param>
+      <value><string>0.9.8</string></value>
+    </param>
+  </params>
+</methodResponse>`,
+      };
+
+      fetchMock.mockResolvedValueOnce(successResponse);
+
+      const { DownloaderManager } = await import('../downloaders.js');
+      await DownloaderManager.testDownloader(testDownloader);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const callHeaders = fetchMock.mock.calls[0][1].headers;
+      
+      // Verify Authorization header uses latin1 encoding
+      const expectedAuth = Buffer.from('admin:test123', 'latin1').toString('base64');
+      expect(callHeaders['Authorization']).toBe(`Basic ${expectedAuth}`);
+      expect(callHeaders['Content-Type']).toBe('text/xml');
+    });
+
+    it('should handle authentication failure with 401 status', async () => {
+      const testDownloader: Downloader = {
+        id: 'test-id',
+        name: 'Test rTorrent',
+        type: 'rtorrent',
+        url: 'http://localhost:8080',
+        urlPath: 'RPC2',
+        username: 'admin',
+        password: 'wrongpassword',
+        enabled: true,
+        priority: 1,
+        downloadPath: null,
+        category: null,
+        settings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const unauthorizedResponse = {
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: new Headers(),
+        text: async () => '',
+      };
+
+      fetchMock.mockResolvedValueOnce(unauthorizedResponse);
+
+      const { DownloaderManager } = await import('../downloaders.js');
+      const result = await DownloaderManager.testDownloader(testDownloader);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Authentication failed');
+      expect(result.message).toContain('Invalid credentials');
+    });
+
+    it('should encode credentials with special characters correctly', async () => {
+      const testDownloader: Downloader = {
+        id: 'test-id',
+        name: 'Test rTorrent',
+        type: 'rtorrent',
+        url: 'http://localhost:8080',
+        urlPath: 'RPC2',
+        username: 'admin',
+        password: 'pàss@wörd!',
+        enabled: true,
+        priority: 1,
+        downloadPath: null,
+        category: null,
+        settings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const successResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        text: async () => `<?xml version="1.0"?>
+<methodResponse>
+  <params>
+    <param>
+      <value><string>0.9.8</string></value>
+    </param>
+  </params>
+</methodResponse>`,
+      };
+
+      fetchMock.mockResolvedValueOnce(successResponse);
+
+      const { DownloaderManager } = await import('../downloaders.js');
+      await DownloaderManager.testDownloader(testDownloader);
+
+      const callHeaders = fetchMock.mock.calls[0][1].headers;
+      
+      // Verify latin1 encoding for special characters
+      const expectedAuth = Buffer.from('admin:pàss@wörd!', 'latin1').toString('base64');
+      expect(callHeaders['Authorization']).toBe(`Basic ${expectedAuth}`);
+      
+      // Verify it differs from UTF-8 encoding (which would be incorrect)
+      const utf8Auth = Buffer.from('admin:pàss@wörd!', 'utf8').toString('base64');
+      expect(callHeaders['Authorization']).not.toBe(`Basic ${utf8Auth}`);
+    });
+
+    it('should correctly format XML-RPC request with authentication', async () => {
+      const testDownloader: Downloader = {
+        id: 'test-id',
+        name: 'Test rTorrent',
+        type: 'rtorrent',
+        url: 'http://localhost:8080',
+        urlPath: 'RPC2',
+        username: 'admin',
+        password: 'secret',
+        enabled: true,
+        priority: 1,
+        downloadPath: null,
+        category: null,
+        settings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const successResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        text: async () => `<?xml version="1.0"?>
+<methodResponse>
+  <params>
+    <param>
+      <value><string>0.9.8</string></value>
+    </param>
+  </params>
+</methodResponse>`,
+      };
+
+      fetchMock.mockResolvedValueOnce(successResponse);
+
+      const { DownloaderManager } = await import('../downloaders.js');
+      await DownloaderManager.testDownloader(testDownloader);
+
+      const call = fetchMock.mock.calls[0];
+      const [url, options] = call;
+      
+      // Verify URL construction
+      expect(url).toBe('http://localhost:8080/RPC2');
+      
+      // Verify request format
+      expect(options.method).toBe('POST');
+      expect(options.headers['Content-Type']).toBe('text/xml');
+      expect(options.headers['Authorization']).toBeDefined();
+      
+      // Verify XML-RPC body format
+      expect(options.body).toContain('<?xml version="1.0"?>');
+      expect(options.body).toContain('<methodCall>');
+      expect(options.body).toContain('<methodName>system.client_version</methodName>');
+    });
+  });
+
+  describe('Encoding Comparison Tests', () => {
+    it('should demonstrate difference between UTF-8 and Latin-1 encoding', () => {
+      const username = 'admin';
+      const password = 'café'; // Contains non-ASCII character
+
+      // Latin-1 (ISO-8859-1) encoding - CORRECT per RFC 7617
+      const latin1Auth = Buffer.from(`${username}:${password}`, 'latin1').toString('base64');
+      
+      // UTF-8 encoding - INCORRECT for HTTP Basic Auth
+      const utf8Auth = Buffer.from(`${username}:${password}`, 'utf8').toString('base64');
+      
+      // They should be different
+      expect(latin1Auth).not.toBe(utf8Auth);
+      
+      // Verify the actual encoding difference
+      // Latin-1 encodes é as 0xE9, UTF-8 as 0xC3 0xA9
+      const latin1Bytes = Buffer.from(`${username}:${password}`, 'latin1');
+      const utf8Bytes = Buffer.from(`${username}:${password}`, 'utf8');
+      expect(utf8Bytes.length).toBeGreaterThan(latin1Bytes.length);
+    });
+
+    it('should produce identical results for ASCII-only credentials', () => {
+      const username = 'admin';
+      const password = 'test123'; // ASCII only
+
+      const latin1Auth = Buffer.from(`${username}:${password}`, 'latin1').toString('base64');
+      const utf8Auth = Buffer.from(`${username}:${password}`, 'utf8').toString('base64');
+      
+      // For ASCII-only, UTF-8 and Latin-1 are identical
+      expect(latin1Auth).toBe(utf8Auth);
+      expect(latin1Auth).toBe('YWRtaW46dGVzdDEyMw==');
+    });
   });
 });
 
