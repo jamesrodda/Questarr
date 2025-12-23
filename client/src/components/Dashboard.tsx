@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import SearchBar from "./SearchBar";
 import GameGrid from "./GameGrid";
@@ -7,21 +7,14 @@ import { Library, Star, Gamepad2, Tags } from "lucide-react";
 import { type Game } from "@shared/schema";
 import { type GameStatus } from "./StatusBadge";
 import { useToast } from "@/hooks/use-toast";
+import { useDebounce } from "@/hooks/use-debounce";
 
 export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  // Debounce search query for live search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
 
   // Query user's collection
   const { data: games = [], isLoading } = useQuery<Game[]>({
@@ -88,17 +81,20 @@ export default function Dashboard() {
     },
   ];
 
-  const handleSearch = (query: string) => {
+  // ⚡ Bolt: Memoize event handlers with `useCallback` to prevent unnecessary
+  // re-renders in child components like `SearchBar` that depend on stable
+  // function references.
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
-  };
+  }, []);
 
-  const handleFilterToggle = () => {
+  const handleFilterToggle = useCallback(() => {
     console.warn("Filter panel toggled");
-  };
+  }, []);
 
-  const handleRemoveFilter = (filter: string) => {
+  const handleRemoveFilter = useCallback((filter: string) => {
     setActiveFilters(prev => prev.filter(f => f !== filter));
-  };
+  }, []);
 
   // ⚡ Bolt: Memoize `handleStatusChange` with `useCallback`.
   // This function is passed down through `GameGrid` to `GameCard` components.

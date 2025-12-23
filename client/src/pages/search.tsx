@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient } from "@/lib/queryClient";
 import { Search, Download, Calendar, Users, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -71,19 +73,20 @@ function formatDate(dateString: string): string {
 export default function SearchPage() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 500);
   const [selectedTorrent, setSelectedTorrent] = useState<TorrentItem | null>(null);
   const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
   const [lastSearchQuery, setLastSearchQuery] = useState("");
 
   const { data: searchResults, isLoading: isSearching, error: searchError } = useQuery<SearchResult>({
-    queryKey: ["/api/search", searchQuery],
-    enabled: searchQuery.trim().length > 0,
+    queryKey: ["/api/search", debouncedSearchQuery],
+    enabled: debouncedSearchQuery.trim().length > 0,
   });
 
   // Show toast notification when search completes
   useEffect(() => {
     // Only show notification if we actually performed a search
-    if (searchQuery && searchQuery !== lastSearchQuery && !isSearching) {
+    if (debouncedSearchQuery && debouncedSearchQuery !== lastSearchQuery && !isSearching) {
       if (searchError) {
         toast({
           title: "Search failed",
@@ -113,9 +116,9 @@ export default function SearchPage() {
           });
         }
       }
-      setLastSearchQuery(searchQuery);
+      setLastSearchQuery(debouncedSearchQuery);
     }
-  }, [searchResults, isSearching, searchError, searchQuery, lastSearchQuery, toast]);
+  }, [searchResults, isSearching, searchError, debouncedSearchQuery, lastSearchQuery, toast]);
 
   const { data: downloaders = [] } = useQuery<Downloader[]>({
     queryKey: ["/api/downloaders/enabled"],
@@ -302,15 +305,23 @@ export default function SearchPage() {
                         </CardDescription>
                       </div>
                       <div className="flex items-center space-x-2 ml-4">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleDownload(torrent)}
-                          disabled={downloaders.length === 0}
-                          data-testid={`button-download-${index}`}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleDownload(torrent)}
+                              disabled={downloaders.length === 0}
+                              data-testid={`button-download-${index}`}
+                              aria-label="Start download"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Start download</p>
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </div>
                   </CardHeader>

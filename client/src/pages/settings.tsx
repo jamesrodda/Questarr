@@ -46,33 +46,6 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6 max-w-4xl">
-        {/* Database Configuration */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <Database className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-lg">Database</CardTitle>
-            </div>
-            <CardDescription>PostgreSQL database connection status</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Status</span>
-              <Badge variant={config?.database.connected ? "default" : "destructive"}>
-                {config?.database.connected ? "Connected" : "Disconnected"}
-              </Badge>
-            </div>
-            {config?.database.url && (
-              <div className="space-y-1">
-                <span className="text-sm font-medium">Connection URL</span>
-                <p className="text-sm text-muted-foreground font-mono break-all">
-                  {config.database.url}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* IGDB API Configuration */}
         <Card>
           <CardHeader>
@@ -105,36 +78,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Server Configuration */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <Server className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-lg">Server</CardTitle>
-            </div>
-            <CardDescription>Application server configuration</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Host</span>
-              <span className="text-sm text-muted-foreground font-mono">
-                {config?.server.host}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Port</span>
-              <span className="text-sm text-muted-foreground font-mono">
-                {config?.server.port}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Environment</span>
-              <Badge variant={config?.server.nodeEnv === "production" ? "default" : "secondary"}>
-                {config?.server.nodeEnv}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

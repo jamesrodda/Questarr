@@ -82,34 +82,37 @@ function validatePaginationParams(query: { limit?: string; offset?: string }): {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint
   app.get("/api/health", async (req, res) => {
-    const health = {
-      ok: true,
-      db: false,
-      igdb: false,
-    };
+    // 🛡️ Sentinel: Harden health check endpoint.
+    // This liveness probe only confirms the server is responsive.
+    // For readiness checks (e.g., database connectivity), use the /api/ready endpoint.
+    res.status(200).json({ status: "ok" });
+  });
+
+  app.get("/api/ready", async (req, res) => {
+    let isHealthy = true;
 
     // Check database connectivity
     try {
       await pool.query("SELECT 1");
-      health.db = true;
     } catch (error) {
       routesLogger.error({ error }, "database health check failed");
-      health.ok = false;
+      isHealthy = false;
     }
 
     // Check IGDB API connectivity
     try {
       // Try to get popular games with a minimal limit to test connectivity
       await igdbClient.getPopularGames(1);
-      health.igdb = true;
     } catch (error) {
       routesLogger.error({ error }, "igdb health check failed");
-      health.ok = false;
+      isHealthy = false;
     }
 
-    // Return 200 if all OK, 500 if any service is down
-    const statusCode = health.ok ? 200 : 500;
-    res.status(statusCode).json(health);
+    if (isHealthy) {
+      res.status(200).json({ status: "ok" });
+    } else {
+      res.status(503).json({ status: "error" });
+    }
   });
 
   // Game collection routes
@@ -995,35 +998,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Configuration endpoint - read-only access to key settings
   app.get("/api/config", sensitiveEndpointLimiter, async (req, res) => {
     try {
-      // Mask password in database URL
-      let maskedDbUrl: string | undefined;
-      const dbUrl = appConfig.database.url;
-      if (dbUrl) {
-        try {
-          const parsedUrl = new URL(dbUrl);
-          if (parsedUrl.password) {
-            parsedUrl.password = '****';
-          }
-          maskedDbUrl = parsedUrl.toString();
-        } catch {
-          // If URL parsing fails, use simple regex fallback
-          maskedDbUrl = dbUrl.replace(/:[^:@]*@/, ':****@');
-        }
-      }
-
+      // 🛡️ Sentinel: Harden config endpoint to prevent information disclosure.
+      // Only expose boolean flags indicating if services are configured, not
+      // sensitive details like database URLs or partial API keys.
       const config: Config = {
-        database: {
-          connected: !!appConfig.database.url,
-          url: maskedDbUrl,
-        },
         igdb: {
           configured: appConfig.igdb.isConfigured,
-          clientId: appConfig.igdb.clientId ? appConfig.igdb.clientId.substring(0, 8) + '...' : undefined,
-        },
-        server: {
-          port: appConfig.server.port,
-          host: appConfig.server.host,
-          nodeEnv: appConfig.server.nodeEnv,
         },
       };
       res.json(config);

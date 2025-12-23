@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import GameCarouselSection from "@/components/GameCarouselSection";
 import { type Game } from "@shared/schema";
@@ -53,6 +54,10 @@ const STATIC_DATA_STALE_TIME = 1000 * 60 * 60;
 export default function DiscoverPage() {
   const [selectedGenre, setSelectedGenre] = useState<string>("Action");
   const [selectedPlatform, setSelectedPlatform] = useState<string>("PC");
+  // ⚡ Bolt: Using the useDebounce hook centralizes and reuses debounce logic,
+  // making the component cleaner and preventing duplicate timers.
+  const debouncedGenre = useDebounce(selectedGenre, 300);
+  const debouncedPlatform = useDebounce(selectedPlatform, 300);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -194,54 +199,59 @@ export default function DiscoverPage() {
     trackGameMutation.mutate(game);
   }, [trackGameMutation]);
 
-  // Common query functions
-  const fetchPopularGames = async (): Promise<Game[]> => {
+  // ⚡ Bolt: Memoizing fetch functions with `useCallback` ensures they have stable
+  // references across re-renders. This is critical for preventing child components
+  // like `GameCarouselSection` from re-rendering unnecessarily when they are
+  // wrapped in `React.memo` and receive these functions as props.
+  const fetchPopularGames = useCallback(async (): Promise<Game[]> => {
     const response = await fetch("/api/igdb/popular?limit=20");
     if (!response.ok) throw new Error("Failed to fetch popular games");
     return response.json();
-  };
+  }, []);
 
-  const fetchRecentGames = async (): Promise<Game[]> => {
+  const fetchRecentGames = useCallback(async (): Promise<Game[]> => {
     const response = await fetch("/api/igdb/recent?limit=20");
     if (!response.ok) throw new Error("Failed to fetch recent games");
     return response.json();
-  };
+  }, []);
 
-  const fetchUpcomingGames = async (): Promise<Game[]> => {
+  const fetchUpcomingGames = useCallback(async (): Promise<Game[]> => {
     const response = await fetch("/api/igdb/upcoming?limit=20");
     if (!response.ok) throw new Error("Failed to fetch upcoming games");
     return response.json();
-  };
+  }, []);
 
-  const fetchGamesByGenre = async (): Promise<Game[]> => {
+  const fetchGamesByGenre = useCallback(async (): Promise<Game[]> => {
     // Validate selectedGenre against known genres before making API call
     const validGenres = genres.length > 0 ? genres : DEFAULT_GENRES;
-    const isValidGenre = validGenres.some((g) => g.name === selectedGenre);
+    const isValidGenre = validGenres.some((g) => g.name === debouncedGenre);
     if (!isValidGenre) {
-      throw new Error("Invalid genre selected");
+      // This case should ideally not be hit if UI is synced with state
+      return []; // Return empty instead of throwing to prevent crash
     }
     
     const response = await fetch(
-      `/api/igdb/genre/${encodeURIComponent(selectedGenre)}?limit=20`
+      `/api/igdb/genre/${encodeURIComponent(debouncedGenre)}?limit=20`
     );
     if (!response.ok) throw new Error("Failed to fetch games by genre");
     return response.json();
-  };
+  }, [debouncedGenre, genres]);
 
-  const fetchGamesByPlatform = async (): Promise<Game[]> => {
+  const fetchGamesByPlatform = useCallback(async (): Promise<Game[]> => {
     // Validate selectedPlatform against known platforms before making API call
     const validPlatforms = platforms.length > 0 ? platforms : DEFAULT_PLATFORMS;
-    const isValidPlatform = validPlatforms.some((p) => p.name === selectedPlatform);
+    const isValidPlatform = validPlatforms.some((p) => p.name === debouncedPlatform);
     if (!isValidPlatform) {
-      throw new Error("Invalid platform selected");
+      // This case should ideally not be hit if UI is synced with state
+      return []; // Return empty instead of throwing to prevent crash
     }
     
     const response = await fetch(
-      `/api/igdb/platform/${encodeURIComponent(selectedPlatform)}?limit=20`
+      `/api/igdb/platform/${encodeURIComponent(debouncedPlatform)}?limit=20`
     );
     if (!response.ok) throw new Error("Failed to fetch games by platform");
     return response.json();
-  };
+  }, [debouncedPlatform, platforms]);
 
   const displayGenres = genres.length > 0 ? genres : DEFAULT_GENRES;
   const displayPlatforms = platforms.length > 0 ? platforms : DEFAULT_PLATFORMS;
@@ -304,7 +314,7 @@ export default function DiscoverPage() {
         </div>
         <GameCarouselSection
           title={`${selectedGenre} Games`}
-          queryKey={["/api/igdb/genre", selectedGenre]}
+          queryKey={["/api/igdb/genre", debouncedGenre]}
           queryFn={fetchGamesByGenre}
           onStatusChange={handleStatusChange}
           onTrackGame={handleTrackGame}
@@ -331,7 +341,7 @@ export default function DiscoverPage() {
         </div>
         <GameCarouselSection
           title={`${selectedPlatform} Games`}
-          queryKey={["/api/igdb/platform", selectedPlatform]}
+          queryKey={["/api/igdb/platform", debouncedPlatform]}
           queryFn={fetchGamesByPlatform}
           onStatusChange={handleStatusChange}
           onTrackGame={handleTrackGame}

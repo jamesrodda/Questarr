@@ -1,6 +1,6 @@
 import { useState, useEffect, memo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Carousel,
@@ -8,6 +8,7 @@ import {
   CarouselItem,
   type CarouselApi,
 } from "@/components/ui/carousel";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import GameCard from "./GameCard";
 import { type Game } from "@shared/schema";
@@ -23,9 +24,10 @@ interface GameCarouselSectionProps {
   isDiscovery?: boolean;
 }
 
-// ⚡ Bolt: Using React.memo to prevent unnecessary re-renders of the carousel
-// when the parent component (e.g., DiscoverPage) updates its state.
-const GameCarouselSection = memo(({
+// ⚡ Bolt: Using React.memo to prevent this component from re-rendering if its props
+// have not changed. This is effective because parent components now pass memoized
+// functions (via useCallback), preventing unnecessary re-renders for the entire section.
+const GameCarouselSection = ({
   title,
   queryKey,
   queryFn,
@@ -37,8 +39,9 @@ const GameCarouselSection = memo(({
   const [api, setApi] = useState<CarouselApi>();
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
+  const [displayedTitle, setDisplayedTitle] = useState(title);
 
-  const { data: games = [], isLoading, isError, error: _error } = useQuery<Game[]>({
+  const { data: games = [], isLoading, isFetching, isError, error: _error } = useQuery<Game[]>({
     queryKey,
     queryFn,
   });
@@ -61,6 +64,15 @@ const GameCarouselSection = memo(({
       api.off("select", updateScrollState);
     };
   }, [api]);
+
+  // 🎨 Palette: Prevent title/content mismatch during re-fetch.
+  // The title is now updated only *after* the new data has been fetched,
+  // ensuring the heading and the game list content always match.
+  useEffect(() => {
+    if (!isFetching) {
+      setDisplayedTitle(title);
+    }
+  }, [isFetching, title]);
 
   const scrollPrev = () => api?.scrollPrev();
   const scrollNext = () => api?.scrollNext();
@@ -105,7 +117,7 @@ const GameCarouselSection = memo(({
   return (
     <div className="space-y-4" data-testid={`carousel-section-${title.toLowerCase().replace(/\s+/g, '-')}`}>
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">{title}</h2>
+        <h2 className="text-xl font-semibold">{displayedTitle}</h2>
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -131,33 +143,43 @@ const GameCarouselSection = memo(({
           </Button>
         </div>
       </div>
-      <Carousel
-        opts={{
-          align: "start",
-          loop: false,
-        }}
-        setApi={setApi}
-        className="w-full"
-      >
-        <CarouselContent className="-ml-4">
-          {games.map((game) => (
-            <CarouselItem
-              key={game.id}
-              className="pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6"
-            >
-              <GameCard
-                game={game}
-                onStatusChange={onStatusChange}
-                onViewDetails={onViewDetails}
-                onTrackGame={onTrackGame}
-                isDiscovery={isDiscovery}
-              />
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
+      <div className="relative" aria-busy={isFetching && !isLoading}>
+        {isFetching && !isLoading && (
+          <div className="absolute inset-0 bg-background/50 backdrop-blur-[2px] z-10 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        )}
+        <Carousel
+          opts={{
+            align: "start",
+            loop: false,
+          }}
+          setApi={setApi}
+          className={cn("w-full transition-opacity", {
+            "opacity-50": isFetching && !isLoading,
+          })}
+          aria-hidden={isFetching && !isLoading}
+        >
+          <CarouselContent className="-ml-4">
+            {games.map((game) => (
+              <CarouselItem
+                key={game.id}
+                className="pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6"
+              >
+                <GameCard
+                  game={game}
+                  onStatusChange={onStatusChange}
+                  onViewDetails={onViewDetails}
+                  onTrackGame={onTrackGame}
+                  isDiscovery={isDiscovery}
+                />
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+        </Carousel>
+      </div>
     </div>
   );
-});
+};
 
-export default GameCarouselSection;
+export default memo(GameCarouselSection);
