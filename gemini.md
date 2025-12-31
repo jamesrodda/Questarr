@@ -8,6 +8,12 @@ GameRadarr is a game collection manager and downloader application, similar to t
 - Search for game torrents using Torznab indexers (e.g., Jackett, Prowlarr).
 - Send downloads to torrent clients (Transmission, rTorrent, qBittorrent).
 
+One of the (a priori) biggest challenges of this solution is that the naming of game releases might not always be consistent accross indexers.
+This is aimed to become an open source project.
+It was started on replit and continued using ai (Copilot)
+
+All of the project text should be in english (commit etc)
+
 ## Tech Stack
 
 - **Frontend:**
