@@ -197,6 +197,15 @@ export const sanitizeDownloaderData = [
     .isLength({ max: 200 })
     .withMessage("Password must be at most 200 characters"),
   body("enabled").optional().isBoolean().withMessage("Enabled must be a boolean").toBoolean(),
+  body("downloadPath")
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage("Download path must be at most 500 characters")
+    // 🛡️ Sentinel: Add path traversal validation.
+    // Disallow '..' in download paths to prevent writing files outside the intended directory.
+    .custom((value) => !value.includes(".."))
+    .withMessage("Download path cannot contain '..'"),
   body("label")
     .optional()
     .trim()
