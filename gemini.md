@@ -109,6 +109,16 @@ All of the project text should be in english (commit etc)
   - Project Path: `C:\Users\Vincent\Repos\Perso\Replit\GameRadarr`
 
 - **Project Status:**
+  - **Phase 1 Completed:** rTorrent authentication issues resolved (Latin1 encoding + Digest Auth support).
   - IGDB Client ID removed from settings UI for security.
   - Torznab error handling improved (includes response body).
+  - **Prowlarr Integration:** Added "Sync from Prowlarr" feature to automatically import indexers.
+  - **Download Handling:**
+    - rTorrent now downloads .torrent files server-side before uploading (bypassing auth issues).
+    - Downloads page filters torrents by the configured category (rTorrent/qBittorrent).
+    - Added category support to internal schema.
+  - **UI/UX:**
+    - Fixed sidebar 404 links (Library, Wishlist, Calendar, Trending).
+    - Implemented live badge counts in the sidebar.
+    - Added vertical scrolling to main content areas.
   - `package-lock.json` is untracked.
