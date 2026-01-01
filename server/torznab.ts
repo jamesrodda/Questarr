@@ -59,7 +59,7 @@ export class TorznabClient {
     try {
       const response = await fetch(searchUrl, {
         headers: {
-          "User-Agent": "GameRadarr/1.0",
+          "User-Agent": "Questarr/1.0",
         },
         signal: AbortSignal.timeout(30000),
       });
@@ -350,7 +350,7 @@ export class TorznabClient {
 
     try {
       const response = await fetch(url.toString(), {
-        headers: { "User-Agent": "GameRadarr/1.0" },
+        headers: { "User-Agent": "Questarr/1.0" },
         signal: AbortSignal.timeout(30000),
       });
 

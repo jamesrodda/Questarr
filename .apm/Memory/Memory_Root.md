@@ -1,7 +1,7 @@
-# GameRadarr – APM Memory Root
+# Questarr – APM Memory Root
 **Memory Strategy:** Dynamic-MD
 **Project Status:** Phase 1 Completed.
-**Project Overview:** GameRadarr is a self-hosted video game collection management application inspired by Radarr/Sonarr. It enables users to search for games via IGDB, find releases through Torznab indexers (Jackett), and download them via torrent clients (rTorrent, Transmission). The primary challenge is intelligent matching between IGDB game metadata and warez PC game release names. This MVP delivers a functional download workflow, regex/heuristic-based matching system (no AI), single-user authentication with bcrypt, backend security with rate limiting, and Docker deployment readiness.
+**Project Overview:** Questarr is a self-hosted video game collection management application inspired by Radarr/Sonarr. It enables users to search for games via IGDB, find releases through Torznab indexers (Jackett), and download them via torrent clients (rTorrent, Transmission). The primary challenge is intelligent matching between IGDB game metadata and warez PC game release names. This MVP delivers a functional download workflow, regex/heuristic-based matching system (no AI), single-user authentication with bcrypt, backend security with rate limiting, and Docker deployment readiness.
 
 ---
 

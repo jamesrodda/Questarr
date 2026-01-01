@@ -24,7 +24,7 @@ jobs:
         with:
           context: .
           push: false
-          tags: gameradarr:test
+          tags: Questarr:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
           load: true
@@ -32,4 +32,4 @@ jobs:
       - name: Verify Docker image
         run: |
           echo "Docker image built successfully"
-          docker images | grep gameradarr || echo "Image not found in docker images, but build completed"
+          docker images | grep Questarr || echo "Image not found in docker images, but build completed"

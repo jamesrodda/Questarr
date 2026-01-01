@@ -879,7 +879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         priority: 1,
         downloadPath: downloadPath || null,
         category: category || null,
-        label: label || "GameRadarr",
+        label: label || "Questarr",
         addStopped: addStopped ?? false,
         removeCompleted: removeCompleted ?? false,
         postImportCategory: postImportCategory || null,

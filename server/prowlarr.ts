@@ -26,7 +26,7 @@ interface ProwlarrIndexer {
 
 export class ProwlarrClient {
   /**
-   * Fetch all indexers from Prowlarr and convert them to GameRadarr Indexer format
+   * Fetch all indexers from Prowlarr and convert them to Questarr Indexer format
    */
   async getIndexers(prowlarrUrl: string, apiKey: string): Promise<Partial<Indexer>[]> {
     // Normalize URL
@@ -41,7 +41,7 @@ export class ProwlarrClient {
       const response = await fetch(apiUrl, {
         headers: {
           "X-Api-Key": apiKey,
-          "User-Agent": "GameRadarr/1.0",
+          "User-Agent": "Questarr/1.0",
         },
         signal: AbortSignal.timeout(30000),
       });

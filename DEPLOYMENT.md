@@ -2,7 +2,7 @@
 
 ## Overview
 
-GameRadarr can be deployed using the automated GitHub Actions workflow for on-demand deployment. The workflow builds a Docker image and pushes it to the GitHub Container Registry (GHCR).
+Questarr can be deployed using the automated GitHub Actions workflow for on-demand deployment. The workflow builds a Docker image and pushes it to the GitHub Container Registry (GHCR).
 
 ## Manual Deployment (On-Demand)
 
@@ -33,23 +33,23 @@ The workflow performs the following steps:
 After deployment, the Docker image is available at:
 
 ```
-ghcr.io/doezer/gameradarr:{tag}
+ghcr.io/doezer/questarr:{tag}
 ```
 
 #### Example: Pull and Run
 
 ```bash
 # Pull the latest production image
-docker pull ghcr.io/doezer/gameradarr:production-latest
+docker pull ghcr.io/doezer/questarr:production-latest
 
 # Run the container
 docker run -d -p 5000:5000 \
-  -e DATABASE_URL=postgresql://user:password@host:5432/gameradarr \
+  -e DATABASE_URL=postgresql://user:password@host:5432/questarr \
   -e IGDB_CLIENT_ID=your_igdb_client_id \
   -e IGDB_CLIENT_SECRET=your_igdb_client_secret \
   -e PORT=5000 \
   -e HOST=0.0.0.0 \
-  ghcr.io/doezer/gameradarr:production-latest
+  ghcr.io/doezer/questarr:production-latest
 ```
 
 ### Using Docker Compose
@@ -59,7 +59,7 @@ You can update the `docker-compose.yml` to use the deployed image:
 ```yaml
 services:
   app:
-    image: ghcr.io/doezer/gameradarr:production-latest
+    image: ghcr.io/doezer/questarr:production-latest
     ports:
       - "${PORT}:${PORT}"
     environment:
@@ -108,21 +108,21 @@ The deployed Docker image can be used with various cloud platforms:
 #### Railway
 
 ```bash
-railway up --image ghcr.io/doezer/gameradarr:production-latest
+railway up --image ghcr.io/doezer/questarr:production-latest
 ```
 
 #### Render
 
 Use the "Deploy from Docker Hub" option and specify:
 ```
-ghcr.io/doezer/gameradarr:production-latest
+ghcr.io/doezer/questarr:production-latest
 ```
 
 #### AWS ECS / Azure Container Instances / Google Cloud Run
 
 Use the image URL in your container configuration:
 ```
-ghcr.io/doezer/gameradarr:production-latest
+ghcr.io/doezer/questarr:production-latest
 ```
 
 ## Rollback
@@ -132,7 +132,7 @@ To rollback to a previous version:
 1. Find the git SHA of the previous working deployment
 2. Run the workflow again, or update your deployment to use:
    ```
-   ghcr.io/doezer/gameradarr:production-{git-sha}
+   ghcr.io/doezer/questarr:production-{git-sha}
    ```
 
 ## Monitoring Deployments

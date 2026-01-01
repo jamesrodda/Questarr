@@ -234,7 +234,7 @@ export class MemStorage implements IStorage {
       priority: insertDownloader.priority ?? 1,
       downloadPath: insertDownloader.downloadPath ?? null,
       category: insertDownloader.category ?? "games",
-      label: insertDownloader.label ?? "GameRadarr",
+      label: insertDownloader.label ?? "Questarr",
       addStopped: insertDownloader.addStopped ?? false,
       removeCompleted: insertDownloader.removeCompleted ?? false,
       postImportCategory: insertDownloader.postImportCategory ?? null,

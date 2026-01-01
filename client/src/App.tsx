@@ -68,7 +68,7 @@ function App() {
       case "/calendar": return "Calendar";
       case "/trending": return "Trending";
       case "/wishlist": return "Wishlist";
-      default: return "GameRadarr";
+      default: return "Questarr";
     }
   };
 

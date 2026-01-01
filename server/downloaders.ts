@@ -498,7 +498,7 @@ class TransmissionClient implements DownloaderClient {
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "User-Agent": "GameRadarr/1.0",
+      "User-Agent": "Questarr/1.0",
     };
 
     if (this.sessionId) {
@@ -1246,7 +1246,7 @@ class RTorrentClient implements DownloaderClient {
 
     const headers: Record<string, string> = {
       "Content-Type": "text/xml",
-      "User-Agent": "GameRadarr/1.0",
+      "User-Agent": "Questarr/1.0",
     };
 
     if (this.downloader.username && this.downloader.password) {
@@ -1788,7 +1788,7 @@ class QBittorrentClient implements DownloaderClient {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "GameRadarr/1.0",
+        "User-Agent": "Questarr/1.0",
       },
       body: formData.toString(),
       signal: AbortSignal.timeout(30000),
@@ -1832,7 +1832,7 @@ class QBittorrentClient implements DownloaderClient {
     const url = this.getBaseUrl() + path;
 
     const headers: Record<string, string> = {
-      "User-Agent": "GameRadarr/1.0",
+      "User-Agent": "Questarr/1.0",
       ...additionalHeaders,
     };
 

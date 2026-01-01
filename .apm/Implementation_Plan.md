@@ -1,7 +1,7 @@
-# GameRadarr – APM Implementation Plan
+# Questarr – APM Implementation Plan
 **Memory Strategy:** Dynamic-MD
 **Last Modification:** Plan creation by the Setup Agent.
-**Project Overview:** GameRadarr is a self-hosted video game collection management application inspired by Radarr/Sonarr. It enables users to search for games via IGDB, find releases through Torznab indexers (Jackett), and download them via torrent clients. The primary challenge is intelligent matching between IGDB game metadata and warez PC game release names. This plan delivers an MVP with a functional download workflow, regex-based matching (no AI), single-user authentication, and Docker deployment readiness.
+**Project Overview:** Questarr is a self-hosted video game collection management application inspired by Radarr/Sonarr. It enables users to search for games via IGDB, find releases through Torznab indexers (Jackett), and download them via torrent clients. The primary challenge is intelligent matching between IGDB game metadata and warez PC game release names. This plan delivers an MVP with a functional download workflow, regex-based matching (no AI), single-user authentication, and Docker deployment readiness.
 
 ---
 
@@ -14,7 +14,7 @@
 
 1. Ad-Hoc Delegation – Research rTorrent/ruTorrent authentication mechanisms
 2. Review current implementation in `server/downloaders.ts` focusing on rTorrent auth logic
-3. Compare GameRadarr's implementation with rTorrent documentation findings and Sonarr's approach
+3. Compare Questarr's implementation with rTorrent documentation findings and Sonarr's approach
 4. Identify specific discrepancies (auth headers, endpoint format, credential encoding, etc.)
 5. Document findings and confirm with User that rTorrent server is accessible and credentials are correct
 
@@ -277,7 +277,7 @@
 5. Include Docker deployment section referencing docker-compose setup from Task 6.1
 
 ### Task 6.3 – Create User Tutorials Documentation - Agent_DevOps
-**Objective:** Write user-focused tutorials for common GameRadarr workflows.
+**Objective:** Write user-focused tutorials for common Questarr workflows.
 **Output:** Tutorial documentation with step-by-step guides for users.
 **Guidance:** User-friendly tutorials covering: searching/matching games, downloading, configuration, troubleshooting. Optional: user provides screenshots or validates tutorial accuracy.
 

@@ -10,7 +10,7 @@ services:
       - NODE_ENV=production
       - PORT=${PORT}
       - HOST=${HOST}
-      - DATABASE_URL=postgresql://postgres:password@db:5432/gameradarr
+      - DATABASE_URL=postgresql://postgres:password@db:5432/questarr
       - IGDB_CLIENT_ID=${IGDB_CLIENT_ID}
       - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
     env_file:
@@ -26,7 +26,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=gameradarr
+      - POSTGRES_DB=questarr
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped

@@ -1,8 +1,8 @@
-# GameRadarr Context & Guidelines
+# Questarr Context & Guidelines
 
 ## Project Overview
 
-GameRadarr is a game collection manager and downloader application, similar to the "Arr" suite (Radarr, Sonarr) but for games. It allows users to:
+Questarr is a game collection manager and downloader application, similar to the "Arr" suite (Radarr, Sonarr) but for games. It allows users to:
 - Discover games via IGDB integration.
 - Track their game collection (wanted, owned, completed).
 - Search for game torrents using Torznab indexers (e.g., Jackett, Prowlarr).
@@ -106,7 +106,7 @@ All of the project text should be in english (commit etc)
 - **User Preferences:**
   - OS: win32
   - Locale: User's locale (e.g., fr-FR based on date format).
-  - Project Path: `C:\Users\Vincent\Repos\Perso\Replit\GameRadarr`
+  - Project Path: `C:\Users\Vincent\Repos\Perso\Replit\Questarr`
 
 - **Project Status:**
   - **Phase 1 Completed:** rTorrent authentication issues resolved (Latin1 encoding + Digest Auth support).

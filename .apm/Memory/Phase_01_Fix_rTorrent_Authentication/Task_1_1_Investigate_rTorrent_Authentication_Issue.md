@@ -10,7 +10,7 @@ important_findings: true
 # Task Log: Task 1.1 - Investigate rTorrent Authentication Issue
 
 ## Summary
-Identified root cause of 401 Unauthorized error: character encoding mismatch in HTTP Basic Auth credentials. GameRadarr uses UTF-8 encoding (Node.js default) while HTTP Basic Auth specification requires ISO-8859-1 (Latin-1).
+Identified root cause of 401 Unauthorized error: character encoding mismatch in HTTP Basic Auth credentials. Questarr uses UTF-8 encoding (Node.js default) while HTTP Basic Auth specification requires ISO-8859-1 (Latin-1).
 
 ## Details
 
@@ -41,7 +41,7 @@ if (this.downloader.username && this.downloader.password) {
 - ⚠️ Uses default UTF-8 encoding (Node.js `Buffer.from()` default)
 
 ### Step 3 - Comparison with Documentation
-Compared GameRadarr implementation against Ad-Hoc research findings:
+Compared Questarr implementation against Ad-Hoc research findings:
 
 **Discrepancies Identified:**
 
@@ -52,7 +52,7 @@ Compared GameRadarr implementation against Ad-Hoc research findings:
 
 2. **Credential Type Pattern (Not Applicable):**
    - Sonarr: Uses `NetworkCredential` for rTorrent
-   - GameRadarr: Manual header construction
+   - Questarr: Manual header construction
    - Analysis: .NET-specific distinction, no JavaScript equivalent
 
 **All Other Aspects Correct:**
@@ -68,7 +68,7 @@ Analyzed why Sonarr uses different credential types for rTorrent vs other client
 - `NetworkCredential`: Delegates to HTTP stack's authentication mechanism
 - `BasicNetworkCredential`: Manually constructs Authorization header
 
-**JavaScript Context:** The `fetch` API has no equivalent to .NET's credential delegation. Manual header construction is the only option. Therefore, this difference is NOT applicable to GameRadarr and NOT the cause of the 401 error.
+**JavaScript Context:** The `fetch` API has no equivalent to .NET's credential delegation. Manual header construction is the only option. Therefore, this difference is NOT applicable to Questarr and NOT the cause of the 401 error.
 
 **Actionable Finding:** Only the ISO-8859-1 encoding requirement applies to JavaScript implementation.
 
@@ -78,7 +78,7 @@ Analyzed why Sonarr uses different credential types for rTorrent vs other client
 
 **Why 401 Occurs:**
 1. HTTP Basic Auth spec requires ISO-8859-1 encoding (RFC 7617)
-2. GameRadarr defaults to UTF-8 encoding
+2. Questarr defaults to UTF-8 encoding
 3. Web server expects ISO-8859-1 encoded credentials
 4. Base64 mismatch for passwords with special characters
 5. Credential validation fails → 401 Unauthorized
@@ -131,7 +131,7 @@ None - Investigation completed successfully across all 5 steps
 
 **Critical Discovery:** HTTP Basic Auth specification (RFC 7617) mandates ISO-8859-1 (Latin-1) character encoding for credentials, not UTF-8. This is explicitly implemented in Sonarr's working rTorrent integration.
 
-**Platform Context:** The `NetworkCredential` vs `BasicNetworkCredential` distinction in Sonarr is .NET-specific and does not translate to JavaScript/Node.js. The `fetch` API requires manual header construction regardless, making GameRadarr's current approach architecturally correct for the platform.
+**Platform Context:** The `NetworkCredential` vs `BasicNetworkCredential` distinction in Sonarr is .NET-specific and does not translate to JavaScript/Node.js. The `fetch` API requires manual header construction regardless, making Questarr's current approach architecturally correct for the platform.
 
 **Scope Impact:** The same encoding issue affects TransmissionClient. While not causing current issues, it should be fixed for RFC compliance and future-proofing.
 

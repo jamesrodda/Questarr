@@ -61,7 +61,7 @@ export const downloaders = pgTable("downloaders", {
   priority: integer("priority").notNull().default(1),
   downloadPath: text("download_path"),
   category: text("category").default("games"), // Category/label in the downloader
-  label: text("label").default("GameRadarr"), // Deprecated - use category instead
+  label: text("label").default("Questarr"), // Deprecated - use category instead
   addStopped: boolean("add_stopped").default(false), // Add torrents in stopped/paused state
   removeCompleted: boolean("remove_completed").default(false), // Remove torrents after completion
   postImportCategory: text("post_import_category"), // Category to set after download completes

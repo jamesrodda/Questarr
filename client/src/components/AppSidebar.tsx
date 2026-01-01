@@ -129,9 +129,7 @@ export default function AppSidebar({ activeItem = "/", onNavigate }: AppSidebarP
             <Library className="w-4 h-4 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-bold text-lg" data-testid="text-app-name">
-              GameRadarr
-            </h1>
+                  <span className="truncate font-semibold">Questarr</span>
             <p className="text-xs text-muted-foreground">Game Management</p>
           </div>
         </div>

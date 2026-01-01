@@ -1,7 +1,7 @@
-# GitHub Copilot Instructions for GameRadarr
+# GitHub Copilot Instructions for Questarr
 
 ## Project Overview
-GameRadarr is a video game management application inspired by Radarr and Steam's library view. It allows users to discover, track, and organize their video game collection with automated discovery and status management. The application features a clean, dark-themed interface focused on visual game covers and efficient browsing.
+Questarr is a video game management application inspired by Radarr and Steam's library view. It allows users to discover, track, and organize their video game collection with automated discovery and status management. The application features a clean, dark-themed interface focused on visual game covers and efficient browsing.
 
 ## Technology Stack
 
