@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { asZodType } from "@/lib/utils";
-import { Plus, Edit, Trash2, Check, X, Activity } from "lucide-react";
+import { Plus, Edit, Trash2, Check, X, Activity, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,9 @@ import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-selec
 export default function IndexersPage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isProwlarrDialogOpen, setIsProwlarrDialogOpen] = useState(false);
+  const [prowlarrUrl, setProwlarrUrl] = useState("");
+  const [prowlarrApiKey, setProwlarrApiKey] = useState("");
   const [editingIndexer, setEditingIndexer] = useState<Indexer | null>(null);
   const [testingIndexerId, setTestingIndexerId] = useState<string | null>(null);
   const [availableCategories, setAvailableCategories] = useState<MultiSelectOption[]>([]);
@@ -40,6 +43,36 @@ export default function IndexersPage() {
 
   const { data: indexers = [], isLoading } = useQuery<Indexer[]>({
     queryKey: ["/api/indexers"],
+  });
+
+  const syncProwlarrMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/indexers/prowlarr/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: prowlarrUrl, apiKey: prowlarrApiKey }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to sync from Prowlarr");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/indexers"] });
+      setIsProwlarrDialogOpen(false);
+      toast({
+        title: "Sync successful",
+        description: data.message,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Sync failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
   });
 
   const addMutation = useMutation({
@@ -266,16 +299,26 @@ export default function IndexersPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="h-full overflow-auto p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold">Indexers</h1>
           <p className="text-muted-foreground">Manage Torznab indexers for game discovery</p>
         </div>
-        <Button onClick={handleAdd} data-testid="button-add-indexer">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Indexer
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsProwlarrDialogOpen(true)}
+            data-testid="button-sync-prowlarr"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Sync Prowlarr
+          </Button>
+          <Button onClick={handleAdd} data-testid="button-add-indexer">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Indexer
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4">
@@ -515,6 +558,66 @@ export default function IndexersPage() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isProwlarrDialogOpen} onOpenChange={setIsProwlarrDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Sync from Prowlarr</DialogTitle>
+            <DialogDescription>
+              Automatically import all your indexers from Prowlarr. This will add new indexers and
+              update existing ones.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="prowlarr-url" className="text-sm font-medium leading-none">
+                Prowlarr URL
+              </label>
+              <Input
+                id="prowlarr-url"
+                placeholder="http://localhost:9696"
+                value={prowlarrUrl}
+                onChange={(e) => setProwlarrUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="prowlarr-apikey" className="text-sm font-medium leading-none">
+                API Key
+              </label>
+              <Input
+                id="prowlarr-apikey"
+                type="password"
+                placeholder="Enter Prowlarr API Key"
+                value={prowlarrApiKey}
+                onChange={(e) => setProwlarrApiKey(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsProwlarrDialogOpen(false)}
+                data-testid="button-cancel-prowlarr"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => syncProwlarrMutation.mutate()}
+                disabled={syncProwlarrMutation.isPending || !prowlarrUrl || !prowlarrApiKey}
+                data-testid="button-sync-prowlarr-confirm"
+              >
+                {syncProwlarrMutation.isPending ? (
+                  <>
+                    <Activity className="mr-2 h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  "Sync Indexers"
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

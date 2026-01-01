@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import AppSidebar from "@/components/AppSidebar";
+import Header from "@/components/Header";
 import { useBackgroundNotifications } from "@/hooks/use-background-notifications";
 import Dashboard from "@/components/Dashboard";
 import DiscoverPage from "@/pages/discover";
@@ -14,6 +15,10 @@ import IndexersPage from "@/pages/indexers";
 import DownloadersPage from "@/pages/downloaders";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
+import LibraryPage from "@/pages/library";
+import CalendarPage from "@/pages/calendar";
+import TrendingPage from "@/pages/trending";
+import WishlistPage from "@/pages/wishlist";
 
 function Router() {
   return (
@@ -25,6 +30,10 @@ function Router() {
       <Route path="/indexers" component={IndexersPage} />
       <Route path="/downloaders" component={DownloadersPage} />
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/library" component={LibraryPage} />
+      <Route path="/calendar" component={CalendarPage} />
+      <Route path="/trending" component={TrendingPage} />
+      <Route path="/wishlist" component={WishlistPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -46,6 +55,23 @@ function App() {
     "--sidebar-width-icon": "4rem", // default icon width
   };
 
+  const getPageTitle = (path: string) => {
+    switch (path) {
+      case "/": return "Dashboard";
+      case "/discover": return "Discover";
+      case "/search": return "Search";
+      case "/downloads": return "Downloads";
+      case "/indexers": return "Indexers";
+      case "/downloaders": return "Downloaders";
+      case "/settings": return "Settings";
+      case "/library": return "Library";
+      case "/calendar": return "Calendar";
+      case "/trending": return "Trending";
+      case "/wishlist": return "Wishlist";
+      default: return "GameRadarr";
+    }
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -53,10 +79,7 @@ function App() {
           <div className="flex h-screen w-full">
             <AppSidebar activeItem={location} onNavigate={navigate} />
             <div className="flex flex-col flex-1">
-              <header className="flex items-center justify-between p-4 border-b">
-                <SidebarTrigger data-testid="button-sidebar-toggle" />
-                <h1 className="text-xl font-semibold">GameRadarr</h1>
-              </header>
+              <Header title={getPageTitle(location)} />
               <main className="flex-1 overflow-hidden">
                 <AppContent />
               </main>

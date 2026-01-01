@@ -93,11 +93,11 @@ const GameCarouselSection = ({
           <h2 className="text-xl font-semibold">{title}</h2>
         </div>
         <div className="flex gap-4">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="flex-shrink-0 w-[180px]">
-              <Skeleton className="aspect-[3/4] w-full rounded-md" />
-              <Skeleton className="h-4 mt-2 w-3/4" />
-              <Skeleton className="h-3 mt-1 w-1/2" />
+          {Array.from({ length: 10 }).map((_, index) => (
+            <div key={index} className="flex-shrink-0 min-w-[150px] min-h-[200px]">
+              <Skeleton className="aspect-[3/4] w-full max-w-[225px] max-h-[300px] mx-auto rounded-md" />
+              <Skeleton className="h-4 mt-2 w-3/4 mx-auto" />
+              <Skeleton className="h-3 mt-1 w-1/2 mx-auto" />
             </div>
           ))}
         </div>
@@ -192,7 +192,7 @@ const GameCarouselSection = ({
             {games.map((game) => (
               <CarouselItem
                 key={game.id}
-                className="pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6"
+                className="pl-4 basis-1/3 sm:basis-1/5 md:basis-1/6 lg:basis-[12.5%] xl:basis-[10%] min-w-[150px] min-h-[200px]"
               >
                 <GameCard
                   game={game}

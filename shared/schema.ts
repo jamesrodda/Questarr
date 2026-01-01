@@ -166,6 +166,7 @@ export interface DownloadStatus {
   leechers?: number;
   ratio?: number;
   error?: string;
+  category?: string;
 }
 
 export interface TorrentDetails extends DownloadStatus {

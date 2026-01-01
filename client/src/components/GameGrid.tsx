@@ -22,15 +22,15 @@ export default function GameGrid({
   if (isLoading) {
     return (
       <div
-        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4"
+        className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4"
         data-testid="grid-games-loading"
       >
-        {Array.from({ length: 12 }).map((_, index) => (
-          <div key={index} className="animate-pulse">
-            <div className="bg-muted rounded-md aspect-[3/4] mb-4"></div>
+        {Array.from({ length: 20 }).map((_, index) => (
+          <div key={index} className="animate-pulse min-w-[150px] min-h-[200px]">
+            <div className="bg-muted rounded-md aspect-[3/4] w-full max-w-[225px] max-h-[300px] mx-auto mb-4"></div>
             <div className="space-y-2">
-              <div className="h-4 bg-muted rounded w-3/4"></div>
-              <div className="h-3 bg-muted rounded w-1/2"></div>
+              <div className="h-4 bg-muted rounded w-3/4 mx-auto"></div>
+              <div className="h-3 bg-muted rounded w-1/2 mx-auto"></div>
             </div>
           </div>
         ))}
@@ -49,7 +49,7 @@ export default function GameGrid({
 
   return (
     <div
-      className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4"
+      className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4"
       data-testid="grid-games"
     >
       {games.map((game) => (

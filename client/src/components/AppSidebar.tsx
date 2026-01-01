@@ -22,8 +22,10 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import { type Game, type DownloadStatus } from "@shared/schema";
 
-const navigation = [
+const staticNavigation = [
   {
     title: "Dashboard",
     url: "/",
@@ -38,13 +40,11 @@ const navigation = [
     title: "Library",
     url: "/library",
     icon: Library,
-    badge: "48",
   },
   {
     title: "Downloads",
     url: "/downloads",
     icon: Download,
-    badge: "3",
   },
   {
     title: "Calendar",
@@ -60,7 +60,6 @@ const navigation = [
     title: "Wishlist",
     url: "/wishlist",
     icon: Star,
-    badge: "12",
   },
 ];
 
@@ -92,6 +91,35 @@ export default function AppSidebar({ activeItem = "/", onNavigate }: AppSidebarP
     console.warn(`Navigation triggered: ${url}`);
     onNavigate?.(url);
   };
+
+  const { data: games = [] } = useQuery<Game[]>({
+    queryKey: ["/api/games"],
+  });
+
+  const { data: downloadsData } = useQuery<{ torrents: DownloadStatus[] }>({
+    queryKey: ["/api/downloads"],
+    refetchInterval: 5000,
+  });
+
+  const libraryCount = games.filter((g) =>
+    ["owned", "completed", "downloading"].includes(g.status)
+  ).length;
+  const wishlistCount = games.filter((g) => g.status === "wanted").length;
+  const activeDownloadsCount = downloadsData?.torrents?.length || 0;
+
+  const navigation = staticNavigation.map((item) => {
+    let badge: string | undefined;
+
+    if (item.title === "Library" && libraryCount > 0) {
+      badge = libraryCount.toString();
+    } else if (item.title === "Wishlist" && wishlistCount > 0) {
+      badge = wishlistCount.toString();
+    } else if (item.title === "Downloads" && activeDownloadsCount > 0) {
+      badge = activeDownloadsCount.toString();
+    }
+
+    return { ...item, badge };
+  });
 
   return (
     <Sidebar data-testid="sidebar-main">

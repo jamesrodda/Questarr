@@ -247,7 +247,7 @@ export default function Downloads() {
   }
 
   return (
-    <div className="p-8">
+    <div className="h-full overflow-auto p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold">Downloads</h1>

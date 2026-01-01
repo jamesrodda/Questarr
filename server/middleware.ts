@@ -105,7 +105,7 @@ export const sanitizeGameData = [
     .withMessage("Summary must be at most 5000 characters"),
   body("coverUrl").optional().trim().isURL().withMessage("Invalid cover URL"),
   body("releaseDate")
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .trim()
     .matches(/^\d{4}-\d{2}-\d{2}$/)
     .withMessage("Invalid date format, use YYYY-MM-DD"),

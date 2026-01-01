@@ -49,7 +49,7 @@ const GameCard = ({
 
   return (
     <Card
-      className="group hover-elevate transition-all duration-200"
+      className="group hover-elevate transition-all duration-200 min-w-[150px] min-h-[200px] max-w-[225px] mx-auto w-full"
       data-testid={`card-game-${game.id}`}
     >
       <div className="relative">
@@ -58,7 +58,7 @@ const GameCard = ({
         <img
           src={game.coverUrl || "/placeholder-game-cover.jpg"}
           alt={`${game.title} cover`}
-          className="w-full aspect-[3/4] object-cover rounded-t-md"
+          className="thumbnail-image rounded-t-md"
           loading="lazy"
           data-testid={`img-cover-${game.id}`}
         />
@@ -97,7 +97,7 @@ const GameCard = ({
           </Button>
         </div>
       </div>
-      <CardContent className="p-4">
+      <CardContent className="p-3">
         <h3
           className="font-semibold text-sm mb-2 line-clamp-2"
           data-testid={`text-title-${game.id}`}

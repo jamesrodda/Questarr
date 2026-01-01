@@ -265,7 +265,7 @@ export default function DownloadersPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="h-full overflow-auto p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold">Downloaders</h1>

@@ -38,7 +38,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="h-full overflow-auto p-8">
       <div className="flex items-center mb-8">
         <SettingsIcon className="h-8 w-8 mr-3" />
         <div>

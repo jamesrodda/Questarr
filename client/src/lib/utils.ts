@@ -51,7 +51,7 @@ export function mapGameToInsertGame(game: Game): InsertGame {
     title: game.title,
     summary: game.summary,
     coverUrl: game.coverUrl,
-    releaseDate: game.releaseDate,
+    releaseDate: game.releaseDate || null,
     rating: game.rating,
     platforms: game.platforms,
     genres: game.genres,

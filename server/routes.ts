@@ -33,6 +33,7 @@ import {
   sanitizeIndexerSearchQuery,
 } from "./middleware.js";
 import { config as appConfig } from "./config.js";
+import { prowlarrClient } from "./prowlarr.js";
 
 // Helper function for aggregated indexer search
 async function handleAggregatedIndexerSearch(req: Request, res: Response) {
@@ -97,6 +98,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // This liveness probe only confirms the server is responsive.
     // For readiness checks (e.g., database connectivity), use the /api/ready endpoint.
     res.status(200).json({ status: "ok" });
+  });
+
+  // Sync indexers from Prowlarr
+  app.post("/api/indexers/prowlarr/sync", sensitiveEndpointLimiter, async (req, res) => {
+    try {
+      const { url, apiKey } = req.body;
+
+      if (!url || !apiKey) {
+        return res.status(400).json({ error: "URL and API Key are required" });
+      }
+
+      const indexers = await prowlarrClient.getIndexers(url, apiKey);
+
+      const results = {
+        added: 0,
+        updated: 0,
+        failed: 0,
+        errors: [] as string[],
+      };
+
+      const existingIndexers = await storage.getAllIndexers();
+
+      for (const idx of indexers) {
+        try {
+          // Check for existing indexer with same URL (exact match)
+          const existing = existingIndexers.find((e) => e.url === idx.url);
+
+          if (existing) {
+            // Update existing
+            await storage.updateIndexer(existing.id, idx);
+            results.updated++;
+          } else {
+            // Create new
+            if (!idx.name || !idx.url || !idx.apiKey) {
+              results.failed++;
+              results.errors.push(`Skipping ${idx.name || "unknown"} - missing required fields`);
+              continue;
+            }
+            await storage.addIndexer(idx as any);
+            results.added++;
+          }
+        } catch (error) {
+          results.failed++;
+          results.errors.push(
+            `Failed to sync ${idx.name}: ${error instanceof Error ? error.message : "Unknown error"}`
+          );
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Synced indexers from Prowlarr: ${results.added} added, ${results.updated} updated`,
+        results,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      routesLogger.error({ error }, "Failed to sync from Prowlarr");
+      res.status(500).json({ error: message });
+    }
   });
 
   app.get("/api/ready", async (req, res) => {

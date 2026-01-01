@@ -75,9 +75,18 @@ export default function GameDownloadDialog({ game, open, onOpenChange }: GameDow
   }, [open, game]);
 
   const { data: searchResults, isLoading: isSearching } = useQuery<SearchResult>({
-    queryKey: ["/api/search", searchQuery],
+    queryKey: [`/api/search?query=${encodeURIComponent(searchQuery)}`],
     enabled: open && searchQuery.trim().length > 0,
   });
+
+  const sortedItems = React.useMemo(() => {
+    if (!searchResults?.items) return [];
+    return [...searchResults.items].sort((a, b) => {
+      const dateA = new Date(a.pubDate).getTime();
+      const dateB = new Date(b.pubDate).getTime();
+      return dateB - dateA;
+    });
+  }, [searchResults?.items]);
 
   const downloadMutation = useMutation({
     mutationFn: async (torrent: TorrentItem) => {
@@ -167,66 +176,62 @@ export default function GameDownloadDialog({ game, open, onOpenChange }: GameDow
             )}
 
             {!isSearching && searchResults && searchResults.items.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Found {searchResults.total} result{searchResults.total !== 1 ? "s" : ""}
-                </p>
-                {searchResults.items.map((torrent) => (
-                  <Card key={torrent.guid || torrent.link}>
-                    <CardHeader>
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-base leading-tight mb-2">
-                            {torrent.title}
-                          </CardTitle>
-                          <CardDescription>
-                            <div className="flex flex-wrap gap-2 items-center">
-                              {torrent.size && (
-                                <Badge variant="outline" className="flex items-center">
-                                  <HardDrive className="h-3 w-3 mr-1" />
-                                  {formatBytes(torrent.size)}
-                                </Badge>
-                              )}
-                              {torrent.seeders !== undefined && (
-                                <Badge variant="outline" className="flex items-center">
-                                  <Users className="h-3 w-3 mr-1" />
-                                  {torrent.seeders}↑ / {torrent.leechers || 0}↓
-                                </Badge>
-                              )}
-                              {torrent.pubDate && (
-                                <Badge variant="outline" className="flex items-center">
-                                  <Calendar className="h-3 w-3 mr-1" />
-                                  {formatDate(torrent.pubDate)}
-                                </Badge>
-                              )}
-                            </div>
-                          </CardDescription>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleDownload(torrent)}
-                          disabled={downloadingGuid !== null}
-                          className="flex-shrink-0 w-[120px]"
-                        >
-                          {downloadingGuid === (torrent.guid || torrent.link) ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4 mr-1" />
-                          )}
-                          {downloadingGuid === (torrent.guid || torrent.link)
-                            ? "Downloading..."
-                            : "Download"}
-                        </Button>
+              <div className="border rounded-md divide-y">
+                <div className="bg-muted/50 p-2 text-xs font-medium flex justify-between items-center">
+                  <div>Release Name</div>
+                  <div className="w-[40px] text-right">Action</div>
+                </div>
+                {sortedItems.map((torrent) => (
+                  <div
+                    key={torrent.guid || torrent.link}
+                    className="p-2 text-sm flex justify-between items-center hover:bg-muted/30 transition-colors gap-4"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate" title={torrent.title}>
+                        {torrent.title}
                       </div>
-                    </CardHeader>
-                    {torrent.description && (
-                      <CardContent className="pt-0">
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {torrent.description}
-                        </p>
-                      </CardContent>
-                    )}
-                  </Card>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <span>{formatDate(torrent.pubDate)}</span>
+                        <span>•</span>
+                        <span>{torrent.size ? formatBytes(torrent.size) : "-"}</span>
+                        <span>•</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-green-600 font-medium">
+                            {torrent.seeders ?? 0}
+                          </span>
+                          <span>/</span>
+                          <span className="text-red-600 font-medium">
+                            {torrent.leechers ?? 0}
+                          </span>
+                          <span>peers</span>
+                        </div>
+                        {torrent.description && (
+                          <>
+                            <span>•</span>
+                            <span className="truncate max-w-[200px]" title={torrent.description}>
+                              {torrent.description}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="w-[40px] text-right flex-shrink-0">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDownload(torrent)}
+                        disabled={downloadingGuid !== null}
+                        className="h-8 w-8"
+                        title="Download"
+                      >
+                        {downloadingGuid === (torrent.guid || torrent.link) ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

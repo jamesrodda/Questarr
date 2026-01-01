@@ -6,6 +6,8 @@ import type {
   TorrentDetails,
 } from "../shared/schema.js";
 import { downloadersLogger } from "./logger.js";
+import crypto from "crypto";
+import parseTorrent from "parse-torrent";
 
 // Type definitions for API responses
 interface TransmissionTorrent {
@@ -506,7 +508,7 @@ class TransmissionClient implements DownloaderClient {
     if (this.downloader.username && this.downloader.password) {
       const auth = Buffer.from(
         `${this.downloader.username}:${this.downloader.password}`,
-        "utf-8"
+        "latin1"
       ).toString("base64");
       headers["Authorization"] = `Basic ${auth}`;
     }
@@ -536,6 +538,7 @@ class TransmissionClient implements DownloaderClient {
         });
 
         if (!retryResponse.ok) {
+          const errorText = await retryResponse.text().catch(() => "No error details available");
           if (retryResponse.status === 401) {
             downloadersLogger.error(
               {
@@ -543,10 +546,11 @@ class TransmissionClient implements DownloaderClient {
                 url,
                 username: this.downloader.username,
                 method,
+                errorText,
               },
               "Transmission authentication failed - check username and password"
             );
-            throw new Error("Authentication failed: Invalid username or password for Transmission");
+            throw new Error(`Authentication failed: Invalid username or password for Transmission - ${errorText}`);
           }
           downloadersLogger.error(
             {
@@ -554,10 +558,11 @@ class TransmissionClient implements DownloaderClient {
               statusText: retryResponse.statusText,
               url,
               method,
+              errorText,
             },
             "Transmission request failed after session ID retry"
           );
-          throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`);
+          throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText} - ${errorText}`);
         }
 
         return retryResponse.json();
@@ -565,17 +570,21 @@ class TransmissionClient implements DownloaderClient {
     }
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => "No error details available");
       if (response.status === 401) {
+        const authHeader = response.headers.get("www-authenticate");
         downloadersLogger.error(
           {
             status: response.status,
             url,
             username: this.downloader.username,
             method,
+            errorText,
+            authHeader,
           },
           "Transmission authentication failed - check username and password"
         );
-        throw new Error("Authentication failed: Invalid username or password for Transmission");
+        throw new Error(`Authentication failed: Invalid username or password for Transmission - ${errorText}`);
       }
       downloadersLogger.error(
         {
@@ -583,10 +592,11 @@ class TransmissionClient implements DownloaderClient {
           statusText: response.statusText,
           url,
           method,
+          errorText,
         },
         "Transmission request failed"
       );
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
     }
 
     return response.json();
@@ -651,47 +661,150 @@ class RTorrentClient implements DownloaderClient {
         };
       }
 
-      // Determine which method to use based on addStopped setting
-      const addMethod = this.downloader.addStopped ? "load.normal" : "load.start";
+      // Helper to fetch with standard headers
+      const fetchTorrent = async (url: string) => {
+        downloadersLogger.debug({ url }, "Downloading torrent file locally");
+        return fetch(url, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            Accept: "application/x-bittorrent, */*",
+          },
+        });
+      };
 
-      // rTorrent uses load.start for adding and starting torrents, or load.normal for stopped torrents
-      // The method returns 0 on success (or sometimes the hash as a string)
-      const result = await this.makeXMLRPCRequest(addMethod, ["", request.url]);
+      let response = await fetchTorrent(request.url);
 
-      // Handle both 0 (success) and string hash responses
-      if (result === 0 || typeof result === "string") {
-        let hash: string;
-        if (typeof result === "string" && result !== "0") {
-          // Some implementations return the hash directly
-          hash = result;
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "No body");
+        downloadersLogger.error(
+          {
+            status: response.status,
+            statusText: response.statusText,
+            url: request.url,
+            headers: Object.fromEntries(response.headers.entries()),
+            errorBody: errorText,
+          },
+          "Failed to download torrent file from indexer"
+        );
+
+        // Retry with %20 replacement for + if 400 Bad Request
+        if (response.status === 400 && request.url.includes("+")) {
+          const fixedUrl = request.url.replace(/\+/g, "%20");
+          downloadersLogger.warn(
+            { original: request.url, fixed: fixedUrl },
+            "Retrying download with %20 instead of +"
+          );
+          response = await fetchTorrent(fixedUrl);
+
+          if (!response.ok) {
+            const retryErrorText = await response.text().catch(() => "No body");
+            downloadersLogger.error({ 
+                status: response.status,
+                url: fixedUrl,
+                errorBody: retryErrorText
+            }, "Retry with %20 failed");
+
+            // Retry 2: Remove 'file' parameter entirely (it's often just for naming)
+            if (request.url.includes("&file=")) {
+                const urlNoFile = request.url.split("&file=")[0];
+                downloadersLogger.warn({ original: request.url, fixed: urlNoFile }, "Retrying download without file parameter");
+                response = await fetchTorrent(urlNoFile);
+                
+                if (!response.ok) {
+                    return {
+                        success: false,
+                        message: `Failed to download torrent file (retry without file param failed): ${response.statusText}`,
+                    };
+                }
+            } else {
+                return {
+                  success: false,
+                  message: `Failed to download torrent file (retry failed): ${response.statusText}`,
+                };
+            }
+          }
         } else {
-          // Extract hash from magnet link or torrent URL
-          hash = extractHashFromUrl(request.url) || "unknown";
+          // Also try removing file param if we didn't try %20 (e.g. no + in URL but still 400)
+          if (response.status === 400 && request.url.includes("&file=")) {
+             const urlNoFile = request.url.split("&file=")[0];
+             downloadersLogger.warn({ original: request.url, fixed: urlNoFile }, "Retrying download without file parameter");
+             response = await fetchTorrent(urlNoFile);
+             
+             if (!response.ok) {
+                 return {
+                    success: false,
+                    message: `Failed to download torrent file (retry without file param failed): ${response.statusText}`,
+                 };
+             }
+          } else {
+              return {
+                success: false,
+                message: `Failed to download torrent file from indexer: ${response.statusText}`,
+              };
+          }
         }
+      }
 
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // 2. Parse it to get the hash
+      let infoHash = "unknown";
+      try {
+        // parse-torrent can handle buffer input
+        const parsed = await parseTorrent(buffer);
+        if (parsed && parsed.infoHash) {
+          infoHash = parsed.infoHash.toLowerCase();
+        }
+      } catch (e) {
+        downloadersLogger.warn({ error: e }, "Failed to parse torrent file for hash");
+      }
+
+      // 3. Send raw file to rTorrent
+      // Determine which method to use based on addStopped setting
+      const addMethod = this.downloader.addStopped ? "load.raw" : "load.raw_start";
+
+      downloadersLogger.debug(
+        { method: addMethod, size: buffer.length, hash: infoHash },
+        "Uploading raw torrent to rTorrent"
+      );
+
+      // rTorrent expects the raw data as the first argument (after empty target)
+      // load.raw_start("", buffer)
+      const result = await this.makeXMLRPCRequest(addMethod, ["", buffer]);
+
+      // Result is usually 0 on success
+      if (result === 0) {
         // Set category/label if specified
         const category = request.category || this.downloader.category;
-        if (category && hash !== "unknown") {
+        if (category && infoHash !== "unknown") {
           try {
-            await this.makeXMLRPCRequest("d.custom1.set", [hash, category]);
+            // Give rTorrent a moment to register the torrent before setting properties
+            // though with XML-RPC it should be sequential
+            await this.makeXMLRPCRequest("d.custom1.set", [infoHash, category]);
           } catch (error) {
-            downloadersLogger.warn({ error, hash, category }, "Failed to set category on torrent");
+            downloadersLogger.warn(
+              { error, hash: infoHash, category },
+              "Failed to set category on torrent"
+            );
           }
         }
 
         return {
           success: true,
-          id: hash,
+          id: infoHash,
           message: `Torrent added successfully${this.downloader.addStopped ? " (stopped)" : ""}`,
         };
       } else {
         return {
           success: false,
-          message: "Failed to add torrent",
+          message: "Failed to add torrent (rTorrent returned failure code)",
         };
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      downloadersLogger.error({ error, url: request.url }, "Failed to add torrent");
       return { success: false, message: `Failed to add torrent: ${errorMessage}` };
     }
   }
@@ -714,6 +827,7 @@ class RTorrentClient implements DownloaderClient {
         "d.peers_connected=",
         "d.peers_complete=",
         "d.message=",
+        "d.custom1=",
       ]);
 
       if (result && result.length > 0) {
@@ -894,6 +1008,7 @@ class RTorrentClient implements DownloaderClient {
       "d.peers_connected=",
       "d.peers_complete=",
       "d.message=",
+      "d.custom1=",
     ]);
 
     if (result) {
@@ -945,7 +1060,7 @@ class RTorrentClient implements DownloaderClient {
   }
 
   private mapRTorrentStatus(torrent: unknown[]): DownloadStatus {
-    // torrent is an array: [hash, name, state, complete, size, completed, down_rate, up_rate, ratio, peers_connected, peers_complete, message]
+    // torrent is an array: [hash, name, state, complete, size, completed, down_rate, up_rate, ratio, peers_connected, peers_complete, message, custom1]
     const [
       hash,
       name,
@@ -959,6 +1074,7 @@ class RTorrentClient implements DownloaderClient {
       peersConnected,
       peersComplete,
       message,
+      custom1,
     ] = torrent;
 
     // rTorrent state: 0=stopped, 1=started
@@ -1001,7 +1117,66 @@ class RTorrentClient implements DownloaderClient {
       leechers: Math.max(0, (peersConnected as number) - (peersComplete as number)),
       ratio: (ratio as number) / 1000, // rTorrent returns ratio * 1000
       error: (message as string) || undefined,
+      category: (custom1 as string) || undefined,
     };
+  }
+
+  private computeDigestHeader(
+    method: string,
+    uri: string,
+    authHeader: string,
+    username: string,
+    password: string
+  ): string {
+    // Parse challenge
+    const challenge: Record<string, string> = {};
+    const regex = /([a-z0-9_-]+)=(?:"([^"]+)"|([a-z0-9_-]+))/gi;
+    let match;
+    while ((match = regex.exec(authHeader)) !== null) {
+      const key = match[1].toLowerCase();
+      const value = match[2] || match[3]; // Group 2 is quoted, Group 3 is unquoted
+      challenge[key] = value;
+    }
+
+    const realm = challenge.realm;
+    const nonce = challenge.nonce;
+    const algorithm = challenge.algorithm || "MD5";
+    const qop = challenge.qop;
+    const opaque = challenge.opaque;
+
+    // A1 = username:realm:password
+    const ha1 = crypto
+      .createHash("md5")
+      .update(`${username}:${realm}:${password}`)
+      .digest("hex");
+
+    // A2 = method:uri
+    const ha2 = crypto.createHash("md5").update(`${method}:${uri}`).digest("hex");
+
+    // Response
+    const nc = "00000001";
+    const cnonce = crypto.randomBytes(8).toString("hex");
+
+    let response: string;
+    if (qop === "auth" || qop === "auth-int") {
+      response = crypto
+        .createHash("md5")
+        .update(`${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`)
+        .digest("hex");
+    } else {
+      response = crypto.createHash("md5").update(`${ha1}:${nonce}:${ha2}`).digest("hex");
+    }
+
+    let auth = `Digest username="${username}", realm="${realm}", nonce="${nonce}", uri="${uri}", algorithm="${algorithm}", response="${response}"`;
+
+    if (opaque) {
+      auth += `, opaque="${opaque}"`;
+    }
+    if (qop) {
+      auth += `, qop=${qop}, nc=${nc}, cnonce="${cnonce}"`;
+    }
+
+    return auth;
   }
 
   private async makeXMLRPCRequest(method: string, params: unknown[]): Promise<XMLValue> {
@@ -1050,7 +1225,9 @@ class RTorrentClient implements DownloaderClient {
     // Build XML-RPC request
     const xmlParams = params
       .map((param) => {
-        if (typeof param === "string") {
+        if (Buffer.isBuffer(param)) {
+          return `<param><value><base64>${param.toString("base64")}</base64></value></param>`;
+        } else if (typeof param === "string") {
           return `<param><value><string>${this.escapeXml(param)}</string></value></param>`;
         } else if (typeof param === "number") {
           return `<param><value><int>${param}</int></value></param>`;
@@ -1075,7 +1252,7 @@ class RTorrentClient implements DownloaderClient {
     if (this.downloader.username && this.downloader.password) {
       const auth = Buffer.from(
         `${this.downloader.username}:${this.downloader.password}`,
-        "utf-8"
+        "latin1"
       ).toString("base64");
       headers["Authorization"] = `Basic ${auth}`;
     }
@@ -1088,18 +1265,77 @@ class RTorrentClient implements DownloaderClient {
     });
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => "No error details available");
       if (response.status === 401) {
+        const authHeader = response.headers.get("www-authenticate");
+
+        // Handle Digest Authentication
+        if (
+          authHeader &&
+          authHeader.toLowerCase().startsWith("digest") &&
+          this.downloader.username &&
+          this.downloader.password
+        ) {
+          try {
+            const uri = urlObj.pathname + urlObj.search;
+            const digestAuth = this.computeDigestHeader(
+              "POST",
+              uri,
+              authHeader,
+              this.downloader.username,
+              this.downloader.password
+            );
+
+            headers["Authorization"] = digestAuth;
+
+            downloadersLogger.debug({ url }, "Retrying rTorrent request with Digest Auth");
+
+            const retryResponse = await fetch(url, {
+              method: "POST",
+              headers,
+              body: xmlBody,
+              signal: AbortSignal.timeout(30000),
+            });
+
+            if (retryResponse.ok) {
+              const retryResponseText = await retryResponse.text();
+              return this.parseXMLRPCResponse(retryResponseText);
+            } else {
+              const retryErrorText = await retryResponse.text().catch(() => "No error details");
+              downloadersLogger.error(
+                {
+                  status: retryResponse.status,
+                  url,
+                  username: this.downloader.username,
+                  method,
+                  errorText: retryErrorText,
+                },
+                "rTorrent Digest Authentication failed"
+              );
+              throw new Error(
+                `Digest Authentication failed: ${retryResponse.status} ${retryResponse.statusText}`
+              );
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            downloadersLogger.error({ error: errorMessage }, "Error processing Digest Auth");
+            throw new Error(`Digest Auth Error: ${errorMessage}`);
+          }
+        }
+
         downloadersLogger.error(
           {
             status: response.status,
             url,
             username: this.downloader.username,
             method,
+            errorText,
+            authHeader,
           },
           "rTorrent authentication failed - verify username, password, and web server authentication configuration"
         );
         throw new Error(
-          "Authentication failed: Invalid credentials or web server authentication not configured for rTorrent"
+          `Authentication failed: Invalid credentials or web server authentication not configured for rTorrent - ${errorText}`
         );
       }
       downloadersLogger.error(
@@ -1108,10 +1344,11 @@ class RTorrentClient implements DownloaderClient {
           statusText: response.statusText,
           url,
           method,
+          errorText,
         },
         "rTorrent XML-RPC request failed"
       );
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
     }
 
     const responseText = await response.text();
@@ -1527,6 +1764,7 @@ class QBittorrentClient implements DownloaderClient {
       leechers: torrent.num_leechs,
       ratio: torrent.ratio,
       error: torrent.state === "error" ? "Torrent error" : undefined,
+      category: torrent.category,
     };
   }
 
@@ -1557,7 +1795,8 @@ class QBittorrentClient implements DownloaderClient {
     });
 
     if (!response.ok) {
-      throw new Error(`Authentication failed: ${response.status} ${response.statusText}`);
+      const errorText = await response.text().catch(() => "No error details available");
+      throw new Error(`Authentication failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
     const responseText = await response.text();
@@ -1627,7 +1866,8 @@ class QBittorrentClient implements DownloaderClient {
     }
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const errorText = await response.text().catch(() => "No error details available");
+      throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
     }
 
     return response;
@@ -1675,7 +1915,30 @@ export class DownloaderManager {
 
   static async getAllTorrents(downloader: Downloader): Promise<DownloadStatus[]> {
     const client = this.createClient(downloader);
-    return await client.getAllTorrents();
+    const torrents = await client.getAllTorrents();
+
+    // Filter by configured category if set
+    if (downloader.category) {
+      const filterCategory = downloader.category.toLowerCase();
+      return torrents.filter((t) => {
+        // Strict category match if available
+        if (t.category) {
+          return t.category.toLowerCase() === filterCategory;
+        }
+
+        // If category is missing in the torrent status:
+        // For clients that support categories (rTorrent, qBittorrent), missing category means "Uncategorized",
+        // so we exclude it if a filter is active.
+        // For Transmission, we haven't implemented category mapping yet, so we include everything to avoid hiding all downloads.
+        if (downloader.type === "transmission") {
+          return true;
+        }
+
+        return false;
+      });
+    }
+
+    return torrents;
   }
 
   static async getTorrentStatus(

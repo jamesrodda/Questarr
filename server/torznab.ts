@@ -70,7 +70,7 @@ export class TorznabClient {
       }
 
       const xmlData = await response.text();
-      return this.parseResponse(xmlData);
+      return this.parseResponse(xmlData, indexer.url);
     } catch (error) {
       torznabLogger.error({ indexerName: indexer.name, error }, `error searching indexer`);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -163,13 +163,26 @@ export class TorznabClient {
     if (params.category && params.category.length > 0) {
       url.searchParams.set("cat", params.category.join(","));
     } else {
-      // Default to game categories if available
-      // Common game category IDs: 4000 (PC Games), 4070 (Mac Games), etc.
-      const gameCategories = indexer.categories?.filter(
-        (cat) => cat.startsWith("40") || cat.includes("game") || cat.includes("pc")
-      );
-      if (gameCategories && gameCategories.length > 0) {
-        url.searchParams.set("cat", gameCategories.join(","));
+      // Default to game categories
+      const configuredCategories = indexer.categories || [];
+
+      if (configuredCategories.length > 0) {
+        // If categories are configured, use only the game-related ones
+        // 40xx: PC Games, 10xx: Console Games
+        const gameCategories = configuredCategories.filter(
+          (cat) =>
+            cat.startsWith("40") ||
+            cat.startsWith("10") ||
+            cat.toLowerCase().includes("game") ||
+            cat.toLowerCase().includes("pc")
+        );
+        if (gameCategories.length > 0) {
+          url.searchParams.set("cat", gameCategories.join(","));
+        }
+      } else {
+        // If NO categories are configured, default to standard Game categories
+        // 4000: PC Games, 1000: Console Games
+        url.searchParams.set("cat", "4000,1000");
       }
     }
 
@@ -187,7 +200,7 @@ export class TorznabClient {
   /**
    * Parse Torznab XML response
    */
-  private parseResponse(xmlData: string): TorznabResponse {
+  private parseResponse(xmlData: string, indexerUrl: string): TorznabResponse {
     try {
       const parsed = this.parser.parse(xmlData);
 
@@ -198,7 +211,9 @@ export class TorznabClient {
       const channel = parsed.rss.channel;
       const items = Array.isArray(channel.item) ? channel.item : channel.item ? [channel.item] : [];
 
-      const torznabItems: TorznabItem[] = items.map((item: any) => this.parseItem(item)); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const torznabItems: TorznabItem[] = items.map((item: any) =>
+        this.parseItem(item, indexerUrl)
+      ); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       return {
         items: torznabItems,
@@ -217,7 +232,7 @@ export class TorznabClient {
    */
   // XML parsing requires any due to dynamic structure
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private parseItem(item: any): TorznabItem {
+  private parseItem(item: any, indexerUrl: string): TorznabItem {
     const torznabItem: TorznabItem = {
       title: item.title || "Unknown",
       link: item.link || item.guid || "",
@@ -229,6 +244,29 @@ export class TorznabClient {
     if (item.enclosure) {
       torznabItem.link = item.enclosure["@_url"] || torznabItem.link;
       torznabItem.size = parseInt(item.enclosure["@_length"]) || undefined;
+    }
+
+    // Rewrite link to use indexer's configured URL (fix for proxies/seedboxes)
+    if (torznabItem.link && indexerUrl) {
+      try {
+        const linkUrl = new URL(torznabItem.link);
+        // Only rewrite HTTP/HTTPS links
+        if (linkUrl.protocol === "http:" || linkUrl.protocol === "https:") {
+          const indexerUrlObj = new URL(indexerUrl);
+          
+          // If the link uses a different port or host than the configured indexer,
+          // but shares the same path structure (heuristic), we force the configured URL.
+          // We assume that the path part returned by the indexer is correct relative to the base.
+          
+          linkUrl.protocol = indexerUrlObj.protocol;
+          linkUrl.host = indexerUrlObj.host; // overrides port too
+          
+          // Use the modified URL
+          torznabItem.link = linkUrl.toString();
+        }
+      } catch (e) {
+        // Ignore invalid URLs or parsing errors
+      }
     }
 
     // Parse Torznab attributes

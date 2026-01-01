@@ -28,16 +28,32 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
+      const isNoisyEndpoint = (path === "/api/downloads" || path === "/api/games") && req.method === "GET";
+
+      // Always log metadata at info level
       expressLogger.info(
         {
           method: req.method,
           path,
           statusCode: res.statusCode,
           duration,
-          response: capturedJsonResponse,
+          // Only include response body for non-noisy endpoints at info level
+          response: isNoisyEndpoint ? undefined : capturedJsonResponse,
         },
         `${req.method} ${path} ${res.statusCode} in ${duration}ms`
       );
+
+      // Log the full response body at debug level for noisy endpoints
+      if (isNoisyEndpoint) {
+        expressLogger.debug(
+          {
+            method: req.method,
+            path,
+            response: capturedJsonResponse,
+          },
+          `${req.method} ${path} response body`
+        );
+      }
     }
   });
 

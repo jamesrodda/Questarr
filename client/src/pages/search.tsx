@@ -102,8 +102,12 @@ export default function SearchPage() {
     isLoading: isSearching,
     error: searchError,
   } = useQuery<SearchResult>({
-    queryKey: ["/api/search", debouncedSearchQuery],
+    queryKey: [`/api/search?query=${encodeURIComponent(debouncedSearchQuery)}`],
     enabled: debouncedSearchQuery.trim().length > 0,
+  });
+
+  const sortedItems = (searchResults?.items || []).slice().sort((a, b) => {
+    return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime();
   });
 
   // Show toast notification when search completes
@@ -217,7 +221,7 @@ export default function SearchPage() {
   };
 
   return (
-    <div className="p-8">
+    <div className="h-full overflow-auto p-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Game Search</h1>
         <p className="text-muted-foreground">Search for games across configured indexers</p>
@@ -304,97 +308,77 @@ export default function SearchPage() {
             </Card>
           )}
 
-          <div className="grid gap-4">
-            {searchResults.items.length > 0 ? (
-              searchResults.items.map((torrent, index) => (
-                <Card key={index} data-testid={`card-torrent-${index}`}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg leading-tight">{torrent.title}</CardTitle>
-                        <CardDescription className="mt-2">
-                          <div className="flex flex-wrap gap-2 items-center">
-                            {torrent.size && (
-                              <Badge
-                                variant="outline"
-                                className="flex items-center"
-                                data-testid={`badge-size-${index}`}
-                              >
-                                <HardDrive className="h-3 w-3 mr-1" />
-                                {formatBytes(torrent.size)}
-                              </Badge>
-                            )}
-                            {torrent.seeders !== undefined && (
-                              <Badge
-                                variant="outline"
-                                className="flex items-center"
-                                data-testid={`badge-peers-${index}`}
-                              >
-                                <Users className="h-3 w-3 mr-1" />
-                                {torrent.seeders}↑ / {torrent.leechers || 0}↓
-                              </Badge>
-                            )}
-                            {torrent.pubDate && (
-                              <Badge
-                                variant="outline"
-                                className="flex items-center"
-                                data-testid={`badge-date-${index}`}
-                              >
-                                <Calendar className="h-3 w-3 mr-1" />
-                                {formatDate(torrent.pubDate)}
-                              </Badge>
-                            )}
-                            {torrent.category && (
-                              <Badge variant="outline" data-testid={`badge-category-${index}`}>
-                                {torrent.category}
-                              </Badge>
-                            )}
-                          </div>
-                        </CardDescription>
-                      </div>
-                      <div className="flex items-center space-x-2 ml-4">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleDownload(torrent)}
-                              disabled={downloaders.length === 0}
-                              data-testid={`button-download-${index}`}
-                              aria-label="Start download"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Start download</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
+          <div className="border rounded-md divide-y overflow-hidden">
+            <div className="bg-muted/50 p-2 text-xs font-medium flex justify-between items-center px-4">
+              <div>Release Name</div>
+              <div className="w-[40px] text-right">Action</div>
+            </div>
+            {sortedItems.length > 0 ? (
+              sortedItems.map((torrent, index) => (
+                <div
+                  key={index}
+                  className="p-3 text-sm flex justify-between items-center hover:bg-muted/30 transition-colors gap-4 px-4"
+                  data-testid={`card-torrent-${index}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate mb-1" title={torrent.title}>
+                      {torrent.title}
                     </div>
-                  </CardHeader>
-                  {torrent.description && (
-                    <CardContent>
-                      <p
-                        className="text-sm text-muted-foreground line-clamp-2"
-                        data-testid={`text-description-${index}`}
-                      >
-                        {torrent.description}
-                      </p>
-                    </CardContent>
-                  )}
-                </Card>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{formatDate(torrent.pubDate)}</span>
+                      <span>•</span>
+                      <span>{torrent.size ? formatBytes(torrent.size) : "-"}</span>
+                      <span>•</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-green-600 font-medium">
+                          {torrent.seeders ?? 0}
+                        </span>
+                        <span>/</span>
+                        <span className="text-red-600 font-medium">
+                          {torrent.leechers ?? 0}
+                        </span>
+                        <span>peers</span>
+                      </div>
+                      {torrent.description && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate max-w-[300px]" title={torrent.description}>
+                            {torrent.description}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="w-[40px] text-right flex-shrink-0">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDownload(torrent)}
+                          disabled={downloaders.length === 0}
+                          className="h-8 w-8"
+                          data-testid={`button-download-${index}`}
+                          aria-label="Start download"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Start download</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
               ))
             ) : (
-              <Card data-testid="card-no-results">
-                <CardHeader>
-                  <CardTitle data-testid="text-no-results-title">No Results Found</CardTitle>
-                  <CardDescription data-testid="text-no-results-description">
-                    Try adjusting your search terms or check if your indexers are properly
-                    configured.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+              <div className="p-8 text-center text-muted-foreground" data-testid="card-no-results">
+                <p className="font-medium text-foreground">No Results Found</p>
+                <p className="text-sm mt-1">
+                  Try adjusting your search terms or check if your indexers are properly
+                  configured.
+                </p>
+              </div>
             )}
           </div>
         </div>
