@@ -121,6 +121,7 @@ interface DownloaderClient {
   pauseTorrent(id: string): Promise<{ success: boolean; message: string }>;
   resumeTorrent(id: string): Promise<{ success: boolean; message: string }>;
   removeTorrent(id: string, deleteFiles?: boolean): Promise<{ success: boolean; message: string }>;
+  getFreeSpace(): Promise<number>;
 }
 
 class TransmissionClient implements DownloaderClient {
@@ -339,6 +340,24 @@ class TransmissionClient implements DownloaderClient {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       return { success: false, message: `Failed to remove torrent: ${errorMessage}` };
+    }
+  }
+
+  async getFreeSpace(): Promise<number> {
+    try {
+      const response = await this.makeRequest("session-get", {
+        fields: ["download-dir"],
+      });
+      const downloadDir = response.arguments["download-dir"];
+      
+      const freeSpaceResponse = await this.makeRequest("free-space", {
+        path: downloadDir,
+      });
+      
+      return freeSpaceResponse.arguments["size-bytes"] || 0;
+    } catch (error) {
+      downloadersLogger.error({ error }, "Error getting free space from Transmission");
+      return 0;
     }
   }
 
@@ -1059,6 +1078,21 @@ class RTorrentClient implements DownloaderClient {
     }
   }
 
+  async getFreeSpace(): Promise<number> {
+    try {
+      // In rTorrent, get the free disk space for the default download directory
+      // d.get_free_disk_space doesn't exist as a global command, 
+      // but we can use disk_free on a path if available or query from a torrent's directory.
+      // A common way is to use get_directory and then disk_free
+      const directory = await this.makeXMLRPCRequest("get_directory", []);
+      const freeSpace = await this.makeXMLRPCRequest("get_free_disk_space", [directory]);
+      return freeSpace || 0;
+    } catch (error) {
+      downloadersLogger.error({ error }, "Error getting free space from rTorrent");
+      return 0;
+    }
+  }
+
   private mapRTorrentStatus(torrent: unknown[]): DownloadStatus {
     // torrent is an array: [hash, name, state, complete, size, completed, down_rate, up_rate, ratio, peers_connected, peers_complete, message, custom1]
     const [
@@ -1702,6 +1736,29 @@ class QBittorrentClient implements DownloaderClient {
     }
   }
 
+  async getFreeSpace(): Promise<number> {
+    try {
+      await this.authenticate();
+      
+      // Get main preferences to find save path
+      const prefResponse = await this.makeRequest("GET", "/api/v2/app/preferences");
+      const prefs = await prefResponse.json();
+      const savePath = prefs.save_path;
+
+      // Get free space for save path
+      // qBittorrent doesn't have a direct free space API for a specific path in older versions,
+      // but in newer ones it does. As a fallback, we can use transfer info.
+      const transferResponse = await this.makeRequest("GET", "/api/v2/transfer/info");
+      const transferInfo = await transferResponse.json();
+      
+      // transferInfo.free_space_on_disk
+      return transferInfo.free_space_on_disk || 0;
+    } catch (error) {
+      downloadersLogger.error({ error }, "Error getting free space from qBittorrent");
+      return 0;
+    }
+  }
+
   private mapQBittorrentStatus(torrent: QBittorrentTorrent): DownloadStatus {
     // qBittorrent state values:
     // uploading, stalledUP, checkingUP, pausedUP, queuedUP, forcedUP - seeding states
@@ -2004,6 +2061,16 @@ export class DownloaderManager {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       return { success: false, message: errorMessage };
+    }
+  }
+
+  static async getFreeSpace(downloader: Downloader): Promise<number> {
+    try {
+      const client = this.createClient(downloader);
+      return await client.getFreeSpace();
+    } catch (error) {
+      downloadersLogger.error({ error, downloaderId: downloader.id }, "Error getting free space");
+      return 0;
     }
   }
 

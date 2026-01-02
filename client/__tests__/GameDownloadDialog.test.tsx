@@ -7,6 +7,7 @@ import { vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import GameDownloadDialog from "../src/components/GameDownloadDialog"; // Adjust path as needed
 import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Mocking external dependencies
 vi.mock("@/hooks/use-toast", () => ({
@@ -29,6 +30,9 @@ vi.mock("lucide-react", () => ({
   Check: () => <div />,
   X: () => <div />,
   Activity: () => <div />,
+  PackagePlus: () => <div data-testid="icon-package-plus" />,
+  FileDown: () => <div data-testid="icon-file-down" />,
+  CheckCircle2: () => <div data-testid="icon-check-circle" />,
 }));
 
 const mockGame = {
@@ -67,8 +71,10 @@ global.fetch = vi.fn();
 const renderComponent = () => {
   return render(
     <QueryClientProvider client={queryClient}>
-      <GameDownloadDialog game={mockGame} open={true} onOpenChange={() => {}} />
-      <Toaster />
+      <TooltipProvider>
+        <GameDownloadDialog game={mockGame} open={true} onOpenChange={() => {}} />
+        <Toaster />
+      </TooltipProvider>
     </QueryClientProvider>
   );
 };
@@ -103,8 +109,10 @@ describe("GameDownloadDialog", () => {
     renderComponent();
 
     // Wait for torrents to be loaded and displayed
-    const downloadButton = await screen.findByRole("button", { name: /Download/i });
+    const downloadIcon = await screen.findByTestId("icon-download");
+    const downloadButton = downloadIcon.closest("button");
     expect(downloadButton).toBeInTheDocument();
+    if (!downloadButton) throw new Error("Button not found");
 
     // Click the download button
     fireEvent.click(downloadButton);

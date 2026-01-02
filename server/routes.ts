@@ -1132,6 +1132,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get free space for all enabled downloaders
+  app.get("/api/downloaders/storage", async (req, res) => {
+    try {
+      const enabledDownloaders = await storage.getEnabledDownloaders();
+      const storageInfo = [];
+
+      for (const downloader of enabledDownloaders) {
+        try {
+          const freeSpace = await DownloaderManager.getFreeSpace(downloader);
+          storageInfo.push({
+            downloaderId: downloader.id,
+            downloaderName: downloader.name,
+            freeSpace,
+          });
+        } catch (error) {
+          routesLogger.error({ downloaderName: downloader.name, error }, "error getting free space");
+          storageInfo.push({
+            downloaderId: downloader.id,
+            downloaderName: downloader.name,
+            freeSpace: 0,
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
+      }
+
+      res.json(storageInfo);
+    } catch (error) {
+      routesLogger.error({ error }, "error getting all storage info");
+      res.status(500).json({ error: "Failed to get storage info" });
+    }
+  });
+
   // Add torrent to best available downloader
   app.post(
     "/api/downloads",

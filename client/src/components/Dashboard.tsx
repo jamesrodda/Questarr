@@ -1,9 +1,9 @@
-import { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import SearchBar from "./SearchBar";
 import GameGrid from "./GameGrid";
 import StatsCard from "./StatsCard";
-import { Library, Star, Gamepad2, Tags, Filter, X } from "lucide-react";
+import { Library, Star, Gamepad2, Tags, Filter, X, LayoutGrid } from "lucide-react";
 import { type Game } from "@shared/schema";
 import { type GameStatus } from "./StatusBadge";
 import { useToast } from "@/hooks/use-toast";
@@ -11,6 +11,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -26,8 +27,16 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<GameStatus | "all">("all");
   const [genreFilter, setGenreFilter] = useState<string>("all");
   const [platformFilter, setPlatformFilter] = useState<string>("all");
+  const [gridColumns, setGridColumns] = useState<number>(() => {
+    const saved = localStorage.getItem("dashboardGridColumns");
+    return saved ? parseInt(saved, 10) : 5;
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    localStorage.setItem("dashboardGridColumns", gridColumns.toString());
+  }, [gridColumns]);
 
   // Query user's collection
   const { data: games = [], isLoading, isFetching } = useQuery<Game[]>({
@@ -266,6 +275,26 @@ export default function Dashboard() {
                     </Select>
                   </div>
                 </div>
+
+                <div className="pt-4 border-t">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <LayoutGrid className="w-4 h-4" />
+                      Grid Columns
+                    </div>
+                    <div className="flex-1 max-w-xs flex items-center gap-4">
+                      <Slider
+                        value={[gridColumns]}
+                        onValueChange={([val]) => setGridColumns(val)}
+                        min={2}
+                        max={10}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <span className="text-sm font-bold w-4 text-center">{gridColumns}</span>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -275,6 +304,7 @@ export default function Dashboard() {
             onStatusChange={handleStatusChange}
             isLoading={isLoading}
             isFetching={isFetching}
+            columns={gridColumns}
           />
         </div>
       </div>

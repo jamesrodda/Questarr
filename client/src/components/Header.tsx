@@ -1,14 +1,30 @@
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Plus, Moon, Sun } from "lucide-react";
+import { Plus, Moon, Sun, HardDrive } from "lucide-react";
 import AddGameModal from "./AddGameModal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { NotificationCenter } from "./NotificationCenter";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 interface HeaderProps {
   title?: string;
+}
+
+interface StorageInfo {
+  downloaderId: string;
+  downloaderName: string;
+  freeSpace: number;
+  error?: string;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
 export default function Header({
@@ -16,6 +32,12 @@ export default function Header({
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+
+  // Fetch storage info every 5 minutes
+  const { data: storageInfo = [] } = useQuery<StorageInfo[]>({
+    queryKey: ["/api/downloaders/storage"],
+    refetchInterval: 5 * 60 * 1000,
+  });
 
   // Avoid hydration mismatch by only rendering theme-dependent UI after mounting
   useEffect(() => {
@@ -42,26 +64,49 @@ export default function Header({
         </h1>
       </div>
 
-      <div className="flex items-center gap-2">
-        <AddGameModal>
-          <Button variant="default" size="sm" data-testid="button-add-game" className="gap-2">
-            <Plus className="w-4 h-4" />
-            Add Game
+      <div className="flex items-center gap-4">
+        {/* Storage Info */}
+        <div className="hidden md:flex items-center gap-3">
+          {storageInfo.map((info) => (
+            <Tooltip key={info.downloaderId}>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground border rounded-full px-2.5 py-1 hover:bg-muted/50 transition-colors cursor-help">
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span className="font-medium">{formatBytes(info.freeSpace)}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="text-center">
+                  <p className="font-semibold">{info.downloaderName}</p>
+                  <p className="text-[10px] text-muted-foreground">Free Disk Space</p>
+                  {info.error && <p className="text-destructive text-[10px] mt-1">{info.error}</p>}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <AddGameModal>
+            <Button variant="default" size="sm" data-testid="button-add-game" className="gap-2">
+              <Plus className="w-4 h-4" />
+              Add Game
+            </Button>
+          </AddGameModal>
+
+          <NotificationCenter />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleThemeToggle}
+            data-testid="button-theme-toggle"
+            aria-label="Toggle theme"
+          >
+            {mounted && (theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />)}
+            {!mounted && <Sun className="w-4 h-4" />}
           </Button>
-        </AddGameModal>
-
-        <NotificationCenter />
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleThemeToggle}
-          data-testid="button-theme-toggle"
-          aria-label="Toggle theme"
-        >
-          {mounted && (theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />)}
-          {!mounted && <Sun className="w-4 h-4" />}
-        </Button>
+        </div>
       </div>
     </header>
   );
