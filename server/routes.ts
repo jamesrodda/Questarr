@@ -127,6 +127,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
+    // Auto-migrate orphan games to this user on login
+    // This handles the transition from single-user to multi-user
+    await storage.assignOrphanGamesToUser(user.id);
+
     const token = generateToken(user);
     res.json({ token, user: { id: user.id, username: user.username } });
   });
@@ -244,15 +248,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Game collection routes
 
   // Get all games in collection
-  app.get("/api/games", async (req, res) => {
+  app.get("/api/games", authenticateToken, async (req, res) => {
     try {
       const { search } = req.query;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userId = (req as any).user.id;
 
       let games;
       if (search && typeof search === "string" && search.trim()) {
-        games = await storage.searchGames(search.trim());
+        games = await storage.searchUserGames(userId, search.trim());
       } else {
-        games = await storage.getAllGames();
+        games = await storage.getUserGames(userId);
       }
 
       res.json(games);
@@ -263,10 +269,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get games by status
-  app.get("/api/games/status/:status", async (req, res) => {
+  app.get("/api/games/status/:status", authenticateToken, async (req, res) => {
     try {
       const { status } = req.params;
-      const games = await storage.getGamesByStatus(status);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userId = (req as any).user.id;
+      const games = await storage.getUserGamesByStatus(userId, status);
       res.json(games);
     } catch (error) {
       routesLogger.error({ error }, "error fetching games by status");
@@ -277,15 +285,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Search user's collection
   app.get(
     "/api/games/search",
+    authenticateToken,
     sanitizeSearchQuery,
     validateRequest,
     async (req: Request, res: Response) => {
       try {
         const { q } = req.query;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const userId = (req as any).user.id;
+
         if (!q || typeof q !== "string") {
           return res.status(400).json({ error: "Search query required" });
         }
-        const games = await storage.searchGames(q);
+        const games = await storage.searchUserGames(userId, q);
         res.json(games);
       } catch (error) {
         routesLogger.error({ error }, "error searching games");
@@ -297,22 +309,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add game to collection
   app.post(
     "/api/games",
+    authenticateToken,
     sensitiveEndpointLimiter,
     sanitizeGameData,
     validateRequest,
     async (req: Request, res: Response) => {
       try {
         routesLogger.debug({ body: req.body }, "received game data");
-        const gameData = insertGameSchema.parse(req.body);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const userId = (req as any).user.id;
+        const gameData = insertGameSchema.parse({ ...req.body, userId });
 
-        // Check if game already exists by IGDB ID
-        if (gameData.igdbId) {
-          const existingGame = await storage.getGameByIgdbId(gameData.igdbId);
-          if (existingGame) {
+        // Check if game already exists by IGDB ID for THIS user (wait, getGameByIgdbId is global? No, it should be user scoped ideally, but IGDB ID is unique per game. However, with multi-user, multiple users can have the same game. So we need checkUserGameByIgdbId or similar. But storage.getGameByIgdbId currently returns *any* game with that ID. I should fix storage first or check manually here)
+        
+        // Actually, I removed the unique constraint on igdbId in the schema.
+        // I need to check if *this user* already has the game.
+        // Since I haven't added `getUserGameByIgdbId` to storage yet, I'll do it inefficiently for now by getting all user games or just assume `addGame` handles duplication logic? No, `addGame` just inserts.
+        
+        // Let's add `getUserGameByIgdbId` to storage in next step or now?
+        // I'll proceed with adding `userId` to gameData first.
+        
+        // ... Wait, I should probably check for existence.
+        // Let's modify the check logic below.
+
+        const userGames = await storage.getUserGames(userId);
+        const existingGame = userGames.find(g => g.igdbId === gameData.igdbId);
+        
+        if (existingGame) {
             return res
               .status(409)
               .json({ error: "Game already in collection", game: existingGame });
-          }
         }
 
         // Always generate new UUID - never trust client-provided IDs

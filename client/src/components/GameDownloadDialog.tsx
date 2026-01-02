@@ -412,9 +412,15 @@ export default function GameDownloadDialog({ game, open, onOpenChange }: GameDow
                             className="p-2 text-sm flex justify-between items-center hover:bg-muted/30 transition-colors gap-4"
                           >
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate" title={torrent.title}>
+                              <a 
+                                href={torrent.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium truncate hover:underline text-primary block" 
+                                title={torrent.title}
+                              >
                                 {torrent.title}
-                              </div>
+                              </a>
                               <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                                 <span>{formatDate(torrent.pubDate)}</span>
                                 <span>•</span>

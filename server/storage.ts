@@ -33,13 +33,17 @@ export interface IStorage {
   // Game methods
   getGame(id: string): Promise<Game | undefined>;
   getGameByIgdbId(igdbId: number): Promise<Game | undefined>;
-  getAllGames(): Promise<Game[]>;
-  getGamesByStatus(status: string): Promise<Game[]>;
-  searchGames(query: string): Promise<Game[]>;
+  getUserGames(userId: string): Promise<Game[]>;
+  getAllGames(): Promise<Game[]>; // Keep for admin/debug or global search? Or maybe deprecated.
+  getGamesByStatus(status: string): Promise<Game[]>; // Should be user scoped too
+  getUserGamesByStatus(userId: string, status: string): Promise<Game[]>;
+  searchUserGames(userId: string, query: string): Promise<Game[]>;
+  searchGames(query: string): Promise<Game[]>; // Deprecated?
   addGame(game: InsertGame): Promise<Game>;
   updateGameStatus(id: string, statusUpdate: UpdateGameStatus): Promise<Game | undefined>;
   updateGame(id: string, updates: Partial<Game>): Promise<Game | undefined>;
   removeGame(id: string): Promise<boolean>;
+  assignOrphanGamesToUser(userId: string): Promise<number>;
 
   // Indexer methods
   getAllIndexers(): Promise<Indexer[]>;
@@ -117,6 +121,12 @@ export class MemStorage implements IStorage {
     return Array.from(this.games.values()).find((game) => game.igdbId === igdbId);
   }
 
+  async getUserGames(userId: string): Promise<Game[]> {
+    return Array.from(this.games.values())
+      .filter((game) => game.userId === userId)
+      .sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
+  }
+
   async getAllGames(): Promise<Game[]> {
     return Array.from(this.games.values()).sort(
       (a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime()
@@ -126,6 +136,12 @@ export class MemStorage implements IStorage {
   async getGamesByStatus(status: string): Promise<Game[]> {
     return Array.from(this.games.values())
       .filter((game) => game.status === status)
+      .sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
+  }
+
+  async getUserGamesByStatus(userId: string, status: string): Promise<Game[]> {
+    return Array.from(this.games.values())
+      .filter((game) => game.userId === userId && game.status === status)
       .sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
   }
 
@@ -141,11 +157,25 @@ export class MemStorage implements IStorage {
       .sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
   }
 
+  async searchUserGames(userId: string, query: string): Promise<Game[]> {
+    const lowercaseQuery = query.toLowerCase();
+    return Array.from(this.games.values())
+      .filter(
+        (game) =>
+          game.userId === userId &&
+          (game.title.toLowerCase().includes(lowercaseQuery) ||
+            game.genres?.some((genre) => genre.toLowerCase().includes(lowercaseQuery)) ||
+            game.platforms?.some((platform) => platform.toLowerCase().includes(lowercaseQuery)))
+      )
+      .sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
+  }
+
   async addGame(insertGame: InsertGame): Promise<Game> {
     const id = randomUUID();
     const game: Game = {
       ...insertGame,
       id,
+      userId: insertGame.userId || null,
       status: insertGame.status || "wanted",
       summary: insertGame.summary || null,
       coverUrl: insertGame.coverUrl || null,
@@ -193,6 +223,18 @@ export class MemStorage implements IStorage {
 
   async removeGame(id: string): Promise<boolean> {
     return this.games.delete(id);
+  }
+
+  async assignOrphanGamesToUser(userId: string): Promise<number> {
+    let count = 0;
+    Array.from(this.games.values()).forEach((game) => {
+      if (!game.userId) {
+        const updatedGame = { ...game, userId };
+        this.games.set(game.id, updatedGame);
+        count++;
+      }
+    });
+    return count;
   }
 
   // Indexer methods
@@ -423,6 +465,14 @@ export class DatabaseStorage implements IStorage {
     return game || undefined;
   }
 
+  async getUserGames(userId: string): Promise<Game[]> {
+    return db
+      .select()
+      .from(games)
+      .where(eq(games.userId, userId))
+      .orderBy(sql`${games.addedAt} DESC`);
+  }
+
   async getAllGames(): Promise<Game[]> {
     return db
       .select()
@@ -437,6 +487,17 @@ export class DatabaseStorage implements IStorage {
         .from(games)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .where(eq(games.status, status as any))
+        .orderBy(sql`${games.addedAt} DESC`)
+    );
+  }
+
+  async getUserGamesByStatus(userId: string, status: string): Promise<Game[]> {
+    return (
+      db
+        .select()
+        .from(games)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .where(and(eq(games.userId, userId), eq(games.status, status as any)))
         .orderBy(sql`${games.addedAt} DESC`)
     );
   }
@@ -456,9 +517,28 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`${games.addedAt} DESC`);
   }
 
+  async searchUserGames(userId: string, query: string): Promise<Game[]> {
+    const searchTerm = `%${query.toLowerCase()}%`;
+    return db
+      .select()
+      .from(games)
+      .where(
+        and(
+          eq(games.userId, userId),
+          or(
+            ilike(games.title, searchTerm),
+            sql`EXISTS (SELECT 1 FROM unnest(${games.genres}) AS genre WHERE genre ILIKE ${searchTerm})`,
+            sql`EXISTS (SELECT 1 FROM unnest(${games.platforms}) AS platform WHERE platform ILIKE ${searchTerm})`
+          )
+        )
+      )
+      .orderBy(sql`${games.addedAt} DESC`);
+  }
+
   async addGame(insertGame: InsertGame): Promise<Game> {
     const gameWithId = {
       id: randomUUID(),
+      userId: insertGame.userId ?? null,
       title: insertGame.title,
       igdbId: insertGame.igdbId ?? null,
       summary: insertGame.summary ?? null,
@@ -504,6 +584,15 @@ export class DatabaseStorage implements IStorage {
     const _result = await db.delete(games).where(eq(games.id, id));
     // For Drizzle, we assume success if no error is thrown
     return true;
+  }
+
+  async assignOrphanGamesToUser(userId: string): Promise<number> {
+    const result = await db
+      .update(games)
+      .set({ userId })
+      .where(sql`${games.userId} IS NULL`)
+      .returning();
+    return result.length;
   }
 
   // Indexer methods

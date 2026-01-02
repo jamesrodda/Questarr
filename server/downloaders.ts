@@ -1081,12 +1081,23 @@ class RTorrentClient implements DownloaderClient {
   async getFreeSpace(): Promise<number> {
     try {
       // In rTorrent, get the free disk space for the default download directory
-      // d.get_free_disk_space doesn't exist as a global command, 
-      // but we can use disk_free on a path if available or query from a torrent's directory.
-      // A common way is to use get_directory and then disk_free
-      const directory = await this.makeXMLRPCRequest("get_directory", []);
-      const freeSpace = await this.makeXMLRPCRequest("get_free_disk_space", [directory]);
-      return freeSpace || 0;
+      // Use directory.default to get the default download directory
+      const directory = await this.makeXMLRPCRequest("directory.default", []);
+      downloadersLogger.debug({ directory }, "Got default directory from rTorrent");
+      
+      // Use df with --output=avail to get just the available space
+      // This is more portable and explicit than parsing columns
+      const dfOutput = await this.makeXMLRPCRequest("execute.capture", ["", "sh", "-c", `df --output=avail -B1 "${directory}" | tail -1`]);
+      downloadersLogger.debug({ dfOutput }, "Got df output from rTorrent");
+      
+      // The output should be just the available bytes
+      const availableBytes = parseInt(dfOutput.toString().trim(), 10);
+      if (!isNaN(availableBytes) && availableBytes > 0) {
+        return availableBytes;
+      }
+      
+      downloadersLogger.warn({ dfOutput, availableBytes }, "Failed to parse df output");
+      return 0;
     } catch (error) {
       downloadersLogger.error({ error }, "Error getting free space from rTorrent");
       return 0;

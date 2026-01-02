@@ -13,7 +13,8 @@ export const users = pgTable("users", {
 
 export const games = pgTable("games", {
   id: varchar("id").primaryKey(),
-  igdbId: integer("igdb_id").unique(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  igdbId: integer("igdb_id"), // Removed unique constraint to allow multiple users to have the same game
   title: text("title").notNull(),
   summary: text("summary"),
   coverUrl: text("cover_url"),
