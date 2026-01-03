@@ -429,7 +429,6 @@ export default function SearchPage() {
                 </div>
                 );
               })
-              ))
             ) : (
               <div className="p-8 text-center text-muted-foreground" data-testid="card-no-results">
                 <p className="font-medium text-foreground">No Results Found</p>
