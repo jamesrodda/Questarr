@@ -49,7 +49,8 @@ IGDB_CLIENT_SECRET=your_client_secret_here
 
 # Required: Secure JWT secret for authentication (generate a random string)
 # IMPORTANT: Set this to prevent token invalidation on restart
-JWT_SECRET=your-secure-random-string-at-least-32-characters-long
+# If not set, a random secret will be generated and stored in the database.
+# JWT_SECRET=your-secure-random-string-at-least-32-characters-long
 
 # Optional: Server configuration
 PORT=5000
