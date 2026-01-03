@@ -35,20 +35,34 @@ async function getJwtSecret(): Promise<string> {
   }
 
   // Check DB
-  const dbSecret = await storage.getSystemConfig("jwt_secret");
-  if (dbSecret) {
-    console.log("Loaded JWT secret from database");
-    cachedJwtSecret = dbSecret;
-    return cachedJwtSecret;
+  try {
+    const dbSecret = await storage.getSystemConfig("jwt_secret");
+    if (dbSecret) {
+      console.log("Loaded JWT secret from database");
+      cachedJwtSecret = dbSecret;
+      return cachedJwtSecret;
+    }
+  } catch (error) {
+    console.warn("Failed to load JWT secret from database, generating new one", error);
   }
 
   // Generate new secret
   const newSecret = crypto.randomBytes(64).toString("hex");
-  await storage.setSystemConfig("jwt_secret", newSecret);
+  
+  try {
+    await storage.setSystemConfig("jwt_secret", newSecret);
+    console.log("Generated and stored new JWT secret in database");
+  } catch (error) {
+    console.error("Failed to store JWT secret in database", error);
+  }
+  
   cachedJwtSecret = newSecret;
   
-  console.warn("⚠️  Generated new JWT secret - all existing tokens are now invalid!");
-  console.warn("⚠️  Set JWT_SECRET in your .env file to prevent this on server restarts.");
+  if (!config.auth.jwtSecret || config.auth.jwtSecret === "questarr-default-secret-change-me") {
+    console.warn("⚠️  Using generated JWT secret.");
+    console.warn("⚠️  Set JWT_SECRET in your .env file to use a persistent secret across database resets.");
+  }
+  
   return newSecret;
 }
 
