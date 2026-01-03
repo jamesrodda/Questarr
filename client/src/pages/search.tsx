@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient } from "@/lib/queryClient";
-import { Search, Download, Calendar, Users, HardDrive } from "lucide-react";
+import { Search, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -113,7 +113,11 @@ export default function SearchPage() {
   // Show toast notification when search completes
   useEffect(() => {
     // Only show notification if we actually performed a search
-    if (debouncedSearchQuery && debouncedSearchQuery !== lastSearchQueryRef.current && !isSearching) {
+    if (
+      debouncedSearchQuery &&
+      debouncedSearchQuery !== lastSearchQueryRef.current &&
+      !isSearching
+    ) {
       if (searchError) {
         toast({
           title: "Search failed",
@@ -330,13 +334,9 @@ export default function SearchPage() {
                       <span>{torrent.size ? formatBytes(torrent.size) : "-"}</span>
                       <span>•</span>
                       <div className="flex items-center gap-1">
-                        <span className="text-green-600 font-medium">
-                          {torrent.seeders ?? 0}
-                        </span>
+                        <span className="text-green-600 font-medium">{torrent.seeders ?? 0}</span>
                         <span>/</span>
-                        <span className="text-red-600 font-medium">
-                          {torrent.leechers ?? 0}
-                        </span>
+                        <span className="text-red-600 font-medium">{torrent.leechers ?? 0}</span>
                         <span>peers</span>
                       </div>
                       {torrent.description && (
@@ -381,8 +381,7 @@ export default function SearchPage() {
               <div className="p-8 text-center text-muted-foreground" data-testid="card-no-results">
                 <p className="font-medium text-foreground">No Results Found</p>
                 <p className="text-sm mt-1">
-                  Try adjusting your search terms or check if your indexers are properly
-                  configured.
+                  Try adjusting your search terms or check if your indexers are properly configured.
                 </p>
               </div>
             )}

@@ -2,14 +2,14 @@ import { Notification } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { Check, Info, AlertTriangle, XCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 
 interface NotificationItemProps {
   notification: Notification;
   onRead: (id: string) => void;
+  onClick?: () => void;
 }
 
-export function NotificationItem({ notification, onRead }: NotificationItemProps) {
+export function NotificationItem({ notification, onRead, onClick }: NotificationItemProps) {
   const getIcon = () => {
     switch (notification.type) {
       case "success":
@@ -25,25 +25,35 @@ export function NotificationItem({ notification, onRead }: NotificationItemProps
     }
   };
 
+  const handleClick = (_e: React.MouseEvent) => {
+    // If clicking the unread indicator or close button (if we had one), don't trigger main click
+    // But here we just have the main container
+
+    if (onClick) {
+      onClick();
+    } else if (!notification.read) {
+      onRead(notification.id);
+    }
+  };
+
   return (
     <div
       className={cn(
         "flex gap-3 p-3 text-sm transition-colors hover:bg-muted/50 cursor-pointer relative group",
         !notification.read && "bg-muted/30 border-l-2 border-primary"
       )}
-      onClick={() => !notification.read && onRead(notification.id)}
+      onClick={handleClick}
     >
       <div className="mt-0.5">{getIcon()}</div>
       <div className="flex-1 space-y-1">
         <div className="flex justify-between items-start">
-            <p className="font-medium leading-none">{notification.title}</p>
-            {!notification.read && (
-                <span className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-            )}
+          <p className="font-medium leading-none">{notification.title}</p>
+          {!notification.read && <span className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />}
         </div>
         <p className="text-muted-foreground">{notification.message}</p>
         <p className="text-xs text-muted-foreground pt-1">
-          {notification.createdAt && formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+          {notification.createdAt &&
+            formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
         </p>
       </div>
     </div>
