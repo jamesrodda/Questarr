@@ -99,26 +99,57 @@ function validatePaginationParams(query: { limit?: string; offset?: string }): {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth Routes
   app.get("/api/auth/status", async (_req, res) => {
-    const userCount = await storage.countUsers();
-    res.json({ hasUsers: userCount > 0 });
+    try {
+      const userCount = await storage.countUsers();
+      res.json({ hasUsers: userCount > 0 });
+    } catch (error) {
+      routesLogger.error({ error }, "Failed to check setup status");
+      res.status(500).json({ error: "Failed to check setup status" });
+    }
   });
 
   app.post("/api/auth/setup", async (req, res) => {
-    const userCount = await storage.countUsers();
-    if (userCount > 0) {
-      return res.status(403).json({ error: "Setup already completed" });
+    try {
+      // Check if setup already completed
+      const userCount = await storage.countUsers();
+      if (userCount > 0) {
+        return res.status(403).json({ error: "Setup already completed" });
+      }
+
+      const { username, password } = req.body;
+      
+      // Validate input
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password required" });
+      }
+      
+      if (typeof username !== "string" || typeof password !== "string") {
+        return res.status(400).json({ error: "Username and password must be strings" });
+      }
+      
+      if (username.length < 3) {
+        return res.status(400).json({ error: "Username must be at least 3 characters" });
+      }
+      
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+      
+      if (username.length > 50) {
+        return res.status(400).json({ error: "Username must be at most 50 characters" });
+      }
+
+      // Create first user
+      const passwordHash = await hashPassword(password);
+      const user = await storage.createUser({ username, passwordHash });
+      const token = await generateToken(user);
+
+      routesLogger.info({ username }, "Initial setup completed");
+      res.json({ token, user: { id: user.id, username: user.username } });
+    } catch (error) {
+      routesLogger.error({ error }, "Setup failed");
+      res.status(500).json({ error: "Setup failed. Please try again." });
     }
-
-    const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ error: "Username and password required" });
-    }
-
-    const passwordHash = await hashPassword(password);
-    const user = await storage.createUser({ username, passwordHash });
-    const token = await generateToken(user);
-
-    res.json({ token, user: { id: user.id, username: user.username } });
   });
 
   app.post("/api/auth/login", async (req, res) => {

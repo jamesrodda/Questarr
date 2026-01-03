@@ -28,14 +28,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { isLoading: isCheckingSetup } = useQuery({
+  const { isLoading: isCheckingSetup, error: setupCheckError } = useQuery({
     queryKey: ["/api/auth/status"],
     queryFn: async () => {
       const res = await fetch("/api/auth/status");
+      if (!res.ok) {
+        throw new Error("Failed to check setup status");
+      }
       const data = await res.json();
       setNeedsSetup(!data.hasUsers);
       return data;
     },
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    staleTime: 60000, // Cache for 1 minute to avoid excessive checks
   });
 
   const { isLoading: isFetchingUser } = useQuery({
@@ -105,6 +111,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isCheckingSetup || isFetchingUser) return;
 
+    // Show error if setup check failed after retries
+    if (setupCheckError) {
+      toast({
+        title: "Connection Error",
+        description: "Unable to connect to the server. Please check your connection and refresh.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (needsSetup && location !== "/setup") {
       setLocation("/setup");
     } else if (!needsSetup && !user && location !== "/login" && location !== "/setup") {
@@ -112,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (user && (location === "/login" || location === "/setup")) {
       setLocation("/");
     }
-  }, [user, needsSetup, location, setLocation, isCheckingSetup, isFetchingUser]);
+  }, [user, needsSetup, location, setLocation, isCheckingSetup, isFetchingUser, setupCheckError, toast]);
 
   return (
     <AuthContext.Provider
