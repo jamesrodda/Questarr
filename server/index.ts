@@ -33,7 +33,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       const isNoisyEndpoint =
-        (path === "/api/downloads" || path === "/api/games") && req.method === "GET" ||
+        ((path === "/api/downloads" || path === "/api/games") && req.method === "GET") ||
         path.startsWith("/api/igdb/genre/") ||
         path === "/api/igdb/popular" ||
         path === "/api/igdb/upcoming";
@@ -71,7 +71,7 @@ app.use((req, res, next) => {
 (async () => {
   // Ensure database is ready before starting server
   await ensureDatabase();
-  
+
   const server = await registerRoutes(app);
   setupSocketIO(server);
 

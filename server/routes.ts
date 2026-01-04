@@ -117,24 +117,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { username, password } = req.body;
-      
+
       // Validate input
       if (!username || !password) {
         return res.status(400).json({ error: "Username and password required" });
       }
-      
+
       if (typeof username !== "string" || typeof password !== "string") {
         return res.status(400).json({ error: "Username and password must be strings" });
       }
-      
+
       if (username.length < 3) {
         return res.status(400).json({ error: "Username must be at least 3 characters" });
       }
-      
+
       if (password.length < 6) {
         return res.status(400).json({ error: "Password must be at least 6 characters" });
       }
-      
+
       if (username.length > 50) {
         return res.status(400).json({ error: "Username must be at most 50 characters" });
       }

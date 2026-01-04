@@ -35,10 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Download, Loader2, FileDown, PackagePlus, SlidersHorizontal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Game } from "@shared/schema";
-import {
-  groupTorrentsByCategory,
-  type TorrentCategory,
-} from "@/lib/torrent-categorizer";
+import { groupTorrentsByCategory, type TorrentCategory } from "@/lib/torrent-categorizer";
 
 interface TorrentItem {
   title: string;
@@ -442,7 +439,10 @@ export default function GameDownloadDialog({ game, open, onOpenChange }: GameDow
                 <Label htmlFor="sortBy" className="text-sm">
                   Sort By
                 </Label>
-                <Select value={sortBy} onValueChange={(v) => setSortBy(v as "seeders" | "date" | "size")}>
+                <Select
+                  value={sortBy}
+                  onValueChange={(v) => setSortBy(v as "seeders" | "date" | "size")}
+                >
                   <SelectTrigger id="sortBy">
                     <SelectValue />
                   </SelectTrigger>

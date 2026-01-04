@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
 export async function runMigrations(): Promise<void> {
   try {
     logger.info("Running database migrations...");
-    
+
     // Check if this is a fresh database or migrated from push
     const drizzleMigrationsTable = await db.execute(sql`
       SELECT EXISTS (
@@ -21,9 +21,9 @@ export async function runMigrations(): Promise<void> {
         AND table_name = '__drizzle_migrations'
       );
     `);
-    
+
     const hasMigrationsTable = drizzleMigrationsTable.rows[0]?.exists;
-    
+
     if (!hasMigrationsTable) {
       // Check if tables already exist (migrated from push)
       const downloadersTable = await db.execute(sql`
@@ -33,11 +33,13 @@ export async function runMigrations(): Promise<void> {
           AND table_name = 'downloaders'
         );
       `);
-      
+
       const hasExistingTables = downloadersTable.rows[0]?.exists;
-      
+
       if (hasExistingTables) {
-        logger.info("Existing tables detected (migrated from drizzle-kit push). Creating migrations tracking table...");
+        logger.info(
+          "Existing tables detected (migrated from drizzle-kit push). Creating migrations tracking table..."
+        );
         // Create the migrations table and mark initial migration as applied
         await db.execute(sql`
           CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
@@ -56,7 +58,7 @@ export async function runMigrations(): Promise<void> {
         return;
       }
     }
-    
+
     await migrate(db, { migrationsFolder: "./migrations" });
     logger.info("Database migrations completed successfully");
   } catch (error) {
@@ -71,11 +73,11 @@ export async function runMigrations(): Promise<void> {
 export async function ensureDatabase(): Promise<void> {
   try {
     logger.info("Checking database connection...");
-    
+
     // Test connection
     await db.execute(sql`SELECT 1`);
     logger.info("Database connection successful");
-    
+
     // Check if users table exists
     const result = await db.execute(sql`
       SELECT EXISTS (
@@ -84,13 +86,13 @@ export async function ensureDatabase(): Promise<void> {
         AND table_name = 'users'
       );
     `);
-    
+
     const tableExists = result.rows[0]?.exists;
-    
+
     if (!tableExists) {
       logger.warn("Users table not found. Running migrations...");
     }
-    
+
     // Always run migrations to ensure schema is up-to-date
     await runMigrations();
   } catch (error) {

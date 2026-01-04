@@ -128,7 +128,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (user && (location === "/login" || location === "/setup")) {
       setLocation("/");
     }
-  }, [user, needsSetup, location, setLocation, isCheckingSetup, isFetchingUser, setupCheckError, toast]);
+  }, [
+    user,
+    needsSetup,
+    location,
+    setLocation,
+    isCheckingSetup,
+    isFetchingUser,
+    setupCheckError,
+    toast,
+  ]);
 
   return (
     <AuthContext.Provider
