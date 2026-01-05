@@ -14,3 +14,4 @@ qbittorrent-*/
 transmission-*/
 sabnzbd-*/
 nzbget-*/
+docker-compose.*.yml
