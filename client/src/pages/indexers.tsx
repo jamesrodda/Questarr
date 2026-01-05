@@ -24,6 +24,13 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertIndexerSchema, type Indexer, type InsertIndexer } from "@shared/schema";
@@ -294,6 +301,7 @@ export default function IndexersPage() {
     setEditingIndexer(indexer);
     form.reset({
       name: indexer.name,
+      protocol: indexer.protocol || "torznab",
       url: indexer.url,
       apiKey: indexer.apiKey,
       enabled: indexer.enabled,
@@ -311,6 +319,7 @@ export default function IndexersPage() {
     setEditingIndexer(null);
     form.reset({
       name: "",
+      protocol: "torznab",
       url: "",
       apiKey: "",
       enabled: true,
@@ -339,7 +348,9 @@ export default function IndexersPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold">Indexers</h1>
-          <p className="text-muted-foreground">Manage Torznab indexers for game discovery</p>
+          <p className="text-muted-foreground">
+            Manage Torznab and Newznab indexers for game discovery
+          </p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -365,6 +376,12 @@ export default function IndexersPage() {
                 <div className="flex justify-between items-start">
                   <div className="flex items-center space-x-3">
                     <CardTitle className="text-lg">{indexer.name}</CardTitle>
+                    <Badge
+                      variant={indexer.protocol === "newznab" ? "secondary" : "default"}
+                      className="uppercase"
+                    >
+                      {indexer.protocol === "newznab" ? "Newznab" : "Torznab"}
+                    </Badge>
                     <Badge
                       variant={indexer.enabled ? "default" : "secondary"}
                       data-testid={`status-indexer-${indexer.id}`}
@@ -450,7 +467,8 @@ export default function IndexersPage() {
           <DialogHeader>
             <DialogTitle>{editingIndexer ? "Edit Indexer" : "Add Indexer"}</DialogTitle>
             <DialogDescription>
-              Configure a Torznab indexer for game discovery and downloads.
+              Configure a Torznab (torrent) or Newznab (Usenet) indexer for game discovery and
+              downloads.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -470,13 +488,43 @@ export default function IndexersPage() {
               />
               <FormField
                 control={form.control}
+                name="protocol"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Protocol</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "torznab"}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-indexer-protocol">
+                          <SelectValue placeholder="Select protocol" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="torznab">Torznab (Torrent)</SelectItem>
+                        <SelectItem value="newznab">Newznab (Usenet)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Torznab for torrent indexers, Newznab for Usenet indexers
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="url"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Torznab URL</FormLabel>
+                    <FormLabel>
+                      {form.watch("protocol") === "newznab" ? "Newznab URL" : "Torznab URL"}
+                    </FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="http://localhost:9117/api/v2.0/indexers/all/results/torznab/"
+                        placeholder={
+                          form.watch("protocol") === "newznab"
+                            ? "http://localhost:8080/api"
+                            : "http://localhost:9117/api/v2.0/indexers/all/results/torznab/"
+                        }
                         {...field}
                         data-testid="input-indexer-url"
                       />

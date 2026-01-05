@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, boolean, timestamp } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  varchar,
+  integer,
+  real,
+  boolean,
+  timestamp,
+  serial,
+  bigint,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -67,9 +77,12 @@ export const indexers = pgTable("indexers", {
   name: text("name").notNull(),
   url: text("url").notNull(),
   apiKey: text("api_key").notNull(),
+  protocol: text("protocol", { enum: ["torznab", "newznab"] })
+    .notNull()
+    .default("torznab"), // Protocol type
   enabled: boolean("enabled").notNull().default(true),
   priority: integer("priority").notNull().default(1),
-  categories: text("categories").array().default([]), // Torznab categories to search
+  categories: text("categories").array().default([]), // Torznab/Newznab categories to search
   rssEnabled: boolean("rss_enabled").notNull().default(true),
   autoSearchEnabled: boolean("auto_search_enabled").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -81,7 +94,9 @@ export const downloaders = pgTable("downloaders", {
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  type: text("type", { enum: ["transmission", "rtorrent", "qbittorrent"] }).notNull(),
+  type: text("type", {
+    enum: ["transmission", "rtorrent", "qbittorrent", "sabnzbd", "nzbget"],
+  }).notNull(),
   url: text("url").notNull(), // Host URL (without port for rTorrent/qBittorrent)
   port: integer("port"), // Port number (used by rTorrent and qBittorrent)
   useSsl: boolean("use_ssl").default(false), // Use SSL/TLS connection
@@ -101,8 +116,8 @@ export const downloaders = pgTable("downloaders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Track torrents associated with games for completion monitoring
-export const gameTorrents = pgTable("game_torrents", {
+// Track downloads (torrents and NZBs) associated with games for completion monitoring
+export const gameDownloads = pgTable("game_downloads", {
   id: varchar("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
@@ -112,14 +127,20 @@ export const gameTorrents = pgTable("game_torrents", {
   downloaderId: varchar("downloader_id")
     .notNull()
     .references(() => downloaders.id, { onDelete: "cascade" }),
-  torrentHash: text("torrent_hash").notNull(), // Hash or ID from the downloader client
-  torrentTitle: text("torrent_title").notNull(),
+  downloadType: text("download_type", { enum: ["torrent", "usenet"] })
+    .notNull()
+    .default("torrent"),
+  downloadHash: text("download_hash").notNull(), // Hash/ID from the downloader client (torrent hash or NZB ID)
+  downloadTitle: text("download_title").notNull(),
   status: text("status", { enum: ["downloading", "completed", "failed", "paused"] })
     .notNull()
     .default("downloading"),
   addedAt: timestamp("added_at").defaultNow(),
   completedAt: timestamp("completed_at"),
 });
+
+// Legacy table name for backward compatibility during migration
+export const gameTorrents = gameDownloads;
 
 export const notifications = pgTable("notifications", {
   id: varchar("id")
@@ -131,6 +152,14 @@ export const notifications = pgTable("notifications", {
   message: text("message").notNull(),
   read: boolean("read").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Drizzle migrations tracking table (used in production)
+// Including this in schema allows db:push to work in dev without conflicts
+export const drizzleMigrations = pgTable("__drizzle_migrations", {
+  id: serial("id").primaryKey(),
+  hash: text("hash").notNull().unique(),
+  createdAt: bigint("created_at", { mode: "number" }),
 });
 
 // Validation schemas using drizzle-zod for runtime validation
@@ -177,11 +206,14 @@ export const insertDownloaderSchema = createInsertSchema(downloaders).omit({
   updatedAt: true,
 });
 
-export const insertGameTorrentSchema = createInsertSchema(gameTorrents).omit({
+export const insertGameDownloadSchema = createInsertSchema(gameDownloads).omit({
   id: true,
   addedAt: true,
   completedAt: true,
 });
+
+// Legacy schema name for backward compatibility
+export const insertGameTorrentSchema = insertGameDownloadSchema;
 
 export const insertNotificationSchema = createInsertSchema(notifications).omit({
   id: true,
@@ -222,8 +254,12 @@ export type InsertIndexer = z.infer<typeof insertIndexerSchema>;
 export type Downloader = typeof downloaders.$inferSelect;
 export type InsertDownloader = z.infer<typeof insertDownloaderSchema>;
 
-export type GameTorrent = typeof gameTorrents.$inferSelect;
-export type InsertGameTorrent = z.infer<typeof insertGameTorrentSchema>;
+export type GameDownload = typeof gameDownloads.$inferSelect;
+export type InsertGameDownload = z.infer<typeof insertGameDownloadSchema>;
+
+// Legacy type names for backward compatibility
+export type GameTorrent = GameDownload;
+export type InsertGameTorrent = InsertGameDownload;
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
@@ -262,16 +298,23 @@ export interface TorrentTracker {
 export interface DownloadStatus {
   id: string;
   name: string;
-  status: "downloading" | "seeding" | "completed" | "paused" | "error";
+  downloadType?: "torrent" | "usenet"; // Type of download
+  status: "downloading" | "seeding" | "completed" | "paused" | "error" | "repairing" | "unpacking";
   progress: number; // 0-100
   downloadSpeed?: number; // bytes per second
-  uploadSpeed?: number; // bytes per second
+  uploadSpeed?: number; // bytes per second (torrents only)
   eta?: number; // seconds
   size?: number; // total bytes
   downloaded?: number; // bytes downloaded
+  // Torrent-specific fields
   seeders?: number;
   leechers?: number;
   ratio?: number;
+  // Usenet-specific fields
+  repairStatus?: "good" | "repairing" | "failed"; // Par2 repair status
+  unpackStatus?: "unpacking" | "completed" | "failed"; // Extract/unpack status
+  age?: number; // Age in days
+  // Common fields
   error?: string;
   category?: string;
 }

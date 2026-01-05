@@ -18,22 +18,29 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 vi.mock("lucide-react", () => ({
-  Download: () => <div data-testid="icon-download" />,
-  HardDrive: () => <div data-testid="icon-harddrive" />,
-  Users: () => <div data-testid="icon-users" />,
-  Calendar: () => <div data-testid="icon-calendar" />,
-  Loader2: () => <div data-testid="icon-loader" />,
-  Search: () => <div data-testid="icon-search" />,
+  Download: (props: Record<string, unknown>) => <div data-testid="icon-download" {...props} />,
+  HardDrive: (props: Record<string, unknown>) => <div data-testid="icon-harddrive" {...props} />,
+  Users: (props: Record<string, unknown>) => <div data-testid="icon-users" {...props} />,
+  Calendar: (props: Record<string, unknown>) => <div data-testid="icon-calendar" {...props} />,
+  Loader2: (props: Record<string, unknown>) => <div data-testid="icon-loader" {...props} />,
+  Search: (props: Record<string, unknown>) => <div data-testid="icon-search" {...props} />,
   Plus: () => <div />,
   Edit: () => <div />,
   Trash2: () => <div />,
   Check: () => <div />,
   X: () => <div />,
   Activity: () => <div />,
-  PackagePlus: () => <div data-testid="icon-package-plus" />,
-  FileDown: () => <div data-testid="icon-file-down" />,
-  CheckCircle2: () => <div data-testid="icon-check-circle" />,
-  SlidersHorizontal: () => <div data-testid="icon-sliders-horizontal" />,
+  PackagePlus: (props: Record<string, unknown>) => (
+    <div data-testid="icon-package-plus" {...props} />
+  ),
+  FileDown: (props: Record<string, unknown>) => <div data-testid="icon-file-down" {...props} />,
+  CheckCircle2: (props: Record<string, unknown>) => (
+    <div data-testid="icon-check-circle" {...props} />
+  ),
+  Newspaper: (props: Record<string, unknown>) => <div data-testid="icon-newspaper" {...props} />,
+  SlidersHorizontal: (props: Record<string, unknown>) => (
+    <div data-testid="icon-sliders-horizontal" {...props} />
+  ),
 }));
 
 const mockGame = {
@@ -62,6 +69,13 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
+      queryFn: async ({ queryKey }) => {
+        const response = await fetch(queryKey.join("/"));
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        return response.json();
+      },
     },
   },
 });
@@ -109,8 +123,9 @@ describe("GameDownloadDialog", () => {
     renderComponent();
 
     // Wait for torrents to be loaded and displayed
-    const downloadIcon = await screen.findByTestId("icon-download");
+    const downloadIcon = await screen.findByTestId("icon-download-action");
     const downloadButton = downloadIcon.closest("button");
+
     expect(downloadButton).toBeInTheDocument();
     if (!downloadButton) throw new Error("Button not found");
 

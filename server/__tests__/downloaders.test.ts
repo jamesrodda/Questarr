@@ -32,15 +32,6 @@ describe("TransmissionClient - 409 Retry Mechanism", () => {
       updatedAt: new Date(),
     };
 
-    // Mock the first response with 409 status and session ID header
-    const _firstResponse = {
-      ok: false,
-      status: 409,
-      statusText: "Conflict",
-      headers: new Map([["X-Transmission-Session-Id", "test-session-id-12345"]]),
-      json: async () => ({}),
-    };
-
     // Create a proper Headers object for the first response
     const headers409 = new Headers();
     headers409.set("X-Transmission-Session-Id", "test-session-id-12345");
@@ -63,6 +54,7 @@ describe("TransmissionClient - 409 Retry Mechanism", () => {
           "torrent-added": {
             id: 42,
             name: "Test Game.torrent",
+            hashString: "abc1234567890123456789012345678901234567",
           },
         },
         result: "success",
@@ -79,7 +71,7 @@ describe("TransmissionClient - 409 Retry Mechanism", () => {
 
     // Test adding a torrent
     const result = await DownloaderManager.addTorrent(testDownloader, {
-      url: "magnet:?xt=urn:btih:test123",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Test Game",
     });
 
@@ -90,8 +82,8 @@ describe("TransmissionClient - 409 Retry Mechanism", () => {
     const firstCall = fetchMock.mock.calls[0];
     const secondCall = fetchMock.mock.calls[1];
 
-    expect(firstCall[0]).toBe("http://localhost:9091/transmission/rpc/");
-    expect(secondCall[0]).toBe("http://localhost:9091/transmission/rpc/");
+    expect(firstCall[0]).toBe("http://localhost:9091/transmission/rpc");
+    expect(secondCall[0]).toBe("http://localhost:9091/transmission/rpc");
 
     // Verify the second call (retry) includes the session ID header
     const secondCallHeaders = secondCall[1].headers;
@@ -99,7 +91,7 @@ describe("TransmissionClient - 409 Retry Mechanism", () => {
 
     // Verify the operation succeeded
     expect(result.success).toBe(true);
-    expect(result.id).toBe("42");
+    expect(result.id).toBe("abc1234567890123456789012345678901234567");
     expect(result.message).toBe("Torrent added successfully");
   });
 
@@ -227,6 +219,7 @@ describe("DownloaderManager - Priority-based Fallback", () => {
           "torrent-added": {
             id: 100,
             name: "Test Game.torrent",
+            hashString: "abc1234567890123456789012345678901234567",
           },
         },
         result: "success",
@@ -238,7 +231,7 @@ describe("DownloaderManager - Priority-based Fallback", () => {
     const { DownloaderManager } = await import("../downloaders.js");
 
     const result = await DownloaderManager.addTorrentWithFallback([downloader1, downloader2], {
-      url: "magnet:?xt=urn:btih:test123",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Test Game",
     });
 
@@ -312,6 +305,7 @@ describe("DownloaderManager - Priority-based Fallback", () => {
           "torrent-added": {
             id: 200,
             name: "Test Game.torrent",
+            hashString: "abc1234567890123456789012345678901234567",
           },
         },
         result: "success",
@@ -326,7 +320,7 @@ describe("DownloaderManager - Priority-based Fallback", () => {
     const { DownloaderManager } = await import("../downloaders.js");
 
     const result = await DownloaderManager.addTorrentWithFallback([downloader1, downloader2], {
-      url: "magnet:?xt=urn:btih:test123",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Test Game",
     });
 
@@ -385,7 +379,7 @@ describe("DownloaderManager - Priority-based Fallback", () => {
     const { DownloaderManager } = await import("../downloaders.js");
 
     const result = await DownloaderManager.addTorrentWithFallback([downloader1, downloader2], {
-      url: "magnet:?xt=urn:btih:test123",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Test Game",
     });
 
@@ -398,7 +392,7 @@ describe("DownloaderManager - Priority-based Fallback", () => {
     const { DownloaderManager } = await import("../downloaders.js");
 
     const result = await DownloaderManager.addTorrentWithFallback([], {
-      url: "magnet:?xt=urn:btih:test123",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Test Game",
     });
 
@@ -407,19 +401,17 @@ describe("DownloaderManager - Priority-based Fallback", () => {
     expect(result.attemptedDownloaders).toEqual([]);
   });
 
-  it("should handle downloader returning duplicate error and fallback to next", async () => {
+  it("should handle downloader returning duplicate as success and stop fallback", async () => {
+    // Create two downloaders
     const downloader1: Downloader = {
       id: "downloader-1",
       name: "Primary Downloader",
       type: "transmission",
-      url: "http://localhost:9091/transmission/rpc",
-      username: null,
-      password: null,
+      url: "http://localhost:9091",
+      username: "admin",
+      password: "password",
       enabled: true,
       priority: 1,
-      downloadPath: null,
-      category: "games",
-      settings: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -428,19 +420,16 @@ describe("DownloaderManager - Priority-based Fallback", () => {
       id: "downloader-2",
       name: "Fallback Downloader",
       type: "transmission",
-      url: "http://localhost:9092/transmission/rpc",
-      username: null,
-      password: null,
+      url: "http://localhost:9092",
+      username: "admin",
+      password: "password",
       enabled: true,
       priority: 2,
-      downloadPath: null,
-      category: "games",
-      settings: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    // Mock duplicate response for first downloader
+    // Mock session ID response for first downloader
     const headers1 = new Headers();
     headers1.set("X-Transmission-Session-Id", "session-123");
     const response409_1 = {
@@ -451,6 +440,7 @@ describe("DownloaderManager - Priority-based Fallback", () => {
       json: async () => ({}),
     };
 
+    // Mock duplicate response for first downloader (now treated as success)
     const duplicateResponse = {
       ok: true,
       status: 200,
@@ -461,33 +451,7 @@ describe("DownloaderManager - Priority-based Fallback", () => {
           "torrent-duplicate": {
             id: 100,
             name: "Test Game.torrent",
-          },
-        },
-        result: "success",
-      }),
-    };
-
-    // Mock successful response for second downloader
-    const headers2 = new Headers();
-    headers2.set("X-Transmission-Session-Id", "session-456");
-    const response409_2 = {
-      ok: false,
-      status: 409,
-      statusText: "Conflict",
-      headers: headers2,
-      json: async () => ({}),
-    };
-
-    const successResponse = {
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      headers: new Headers(),
-      json: async () => ({
-        arguments: {
-          "torrent-added": {
-            id: 200,
-            name: "Test Game.torrent",
+            hashString: "abc1234567890123456789012345678901234567",
           },
         },
         result: "success",
@@ -496,21 +460,19 @@ describe("DownloaderManager - Priority-based Fallback", () => {
 
     fetchMock
       .mockResolvedValueOnce(response409_1) // First downloader 409
-      .mockResolvedValueOnce(duplicateResponse) // First downloader duplicate
-      .mockResolvedValueOnce(response409_2) // Second downloader 409
-      .mockResolvedValueOnce(successResponse); // Second downloader success
+      .mockResolvedValueOnce(duplicateResponse); // First downloader duplicate (success)
 
     const { DownloaderManager } = await import("../downloaders.js");
 
     const result = await DownloaderManager.addTorrentWithFallback([downloader1, downloader2], {
-      url: "magnet:?xt=urn:btih:test123",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Test Game",
     });
 
     expect(result.success).toBe(true);
-    expect(result.downloaderId).toBe("downloader-2");
-    expect(result.downloaderName).toBe("Fallback Downloader");
-    expect(result.attemptedDownloaders).toEqual(["Primary Downloader", "Fallback Downloader"]);
+    expect(result.downloaderId).toBe("downloader-1");
+    expect(result.downloaderName).toBe("Primary Downloader");
+    expect(result.attemptedDownloaders).toEqual(["Primary Downloader"]);
   });
 });
 
@@ -620,7 +582,7 @@ describe("RTorrentClient - XML-RPC Protocol", () => {
     const { DownloaderManager } = await import("../downloaders.js");
 
     const result = await DownloaderManager.addTorrent(testDownloader, {
-      url: "magnet:?xt=urn:btih:test123",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Test Game",
     });
 
@@ -944,7 +906,7 @@ describe("RTorrentClient - XML-RPC Protocol", () => {
     const { DownloaderManager } = await import("../downloaders.js");
 
     const result = await DownloaderManager.addTorrent(testDownloader, {
-      url: "magnet:?xt=urn:btih:invalid",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Invalid Torrent",
     });
 
@@ -1121,23 +1083,30 @@ describe("QBittorrentClient - Web API v2", () => {
       text: async () => "Ok.",
     };
 
-    fetchMock.mockResolvedValueOnce(successResponse);
+    const verifyResponse = {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => [{ name: "Test Game", hash: "abc1234567890123456789012345678901234567" }],
+    };
+
+    fetchMock.mockResolvedValueOnce(successResponse).mockResolvedValueOnce(verifyResponse);
 
     const { DownloaderManager } = await import("../downloaders.js");
 
     const result = await DownloaderManager.addTorrent(testDownloader, {
-      url: "magnet:?xt=urn:btih:abc123def456789abc123def456789abc123def4",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Test Game",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8080/api/v2/torrents/add");
     expect(result.success).toBe(true);
-    expect(result.id).toBe("abc123def456789abc123def456789abc123def4");
+    expect(result.id).toBe("abc1234567890123456789012345678901234567");
     expect(result.message).toBe("Torrent added successfully");
   });
 
-  it("should handle duplicate torrent error", async () => {
+  it("should handle duplicate torrent as success", async () => {
     const testDownloader: Downloader = {
       id: "qbittorrent-id",
       name: "Test qBittorrent",
@@ -1167,12 +1136,12 @@ describe("QBittorrentClient - Web API v2", () => {
     const { DownloaderManager } = await import("../downloaders.js");
 
     const result = await DownloaderManager.addTorrent(testDownloader, {
-      url: "magnet:?xt=urn:btih:abc123",
+      url: "magnet:?xt=urn:btih:abc1234567890123456789012345678901234567",
       title: "Test Game",
     });
 
-    expect(result.success).toBe(false);
-    expect(result.message).toBe("Torrent already exists or invalid torrent");
+    expect(result.success).toBe(true);
+    expect(result.message).toBe("Torrent already exists or invalid torrent (qBittorrent)");
   });
 
   it("should get all torrents with correct status mapping", async () => {

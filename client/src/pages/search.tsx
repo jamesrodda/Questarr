@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient } from "@/lib/queryClient";
-import { Search, Download } from "lucide-react";
+import { formatBytes, formatAge, isUsenetItem } from "@/lib/downloads-utils";
+import { Search, Download, Newspaper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,11 @@ interface TorrentItem {
   uploadVolumeFactor?: number;
   guid?: string;
   comments?: string;
+  // Usenet-specific fields
+  grabs?: number;
+  age?: number;
+  poster?: string;
+  group?: string;
 }
 
 interface SearchResult {
@@ -72,14 +78,6 @@ const downloadSchema = z.object({
 });
 
 type DownloadForm = z.infer<typeof downloadSchema>;
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
 
 function formatDate(dateString: string): string {
   try {
@@ -171,6 +169,7 @@ export default function SearchPage() {
           category: data.formData.category || undefined,
           downloadPath: data.formData.downloadPath,
           priority: data.formData.priority,
+          downloadType: isUsenetItem(data.torrent) ? "usenet" : "torrent",
         }),
       });
       if (!response.ok) throw new Error("Failed to add download");
@@ -208,14 +207,25 @@ export default function SearchPage() {
   };
 
   const handleDownload = (torrent: TorrentItem) => {
-    if (downloaders.length === 0) {
-      toast({ title: "No downloaders configured", variant: "destructive" });
+    const isUsenet = isUsenetItem(torrent);
+    const compatibleDownloaders = downloaders.filter((d) =>
+      isUsenet
+        ? ["sabnzbd", "nzbget"].includes(d.type)
+        : ["transmission", "rtorrent", "qbittorrent"].includes(d.type)
+    );
+
+    if (compatibleDownloaders.length === 0) {
+      toast({
+        title: "No compatible downloaders",
+        description: `Please configure a ${isUsenet ? "Usenet" : "Torrent"} downloader in settings.`,
+        variant: "destructive",
+      });
       return;
     }
 
     setSelectedTorrent(torrent);
     form.reset({
-      downloaderId: downloaders[0]?.id || "",
+      downloaderId: compatibleDownloaders[0]?.id || "",
       category: "",
       downloadPath: "",
       priority: 5,
@@ -228,6 +238,15 @@ export default function SearchPage() {
       downloadMutation.mutate({ torrent: selectedTorrent, formData: data });
     }
   };
+
+  // Filter downloaders for the dialog dropdown
+  const filteredDownloaders = selectedTorrent
+    ? downloaders.filter((d) =>
+        isUsenetItem(selectedTorrent)
+          ? ["sabnzbd", "nzbget"].includes(d.type)
+          : ["transmission", "rtorrent", "qbittorrent"].includes(d.type)
+      )
+    : downloaders;
 
   return (
     <div className="h-full overflow-auto p-8">
@@ -323,65 +342,113 @@ export default function SearchPage() {
               <div className="w-[40px] text-right">Action</div>
             </div>
             {sortedItems.length > 0 ? (
-              sortedItems.map((torrent, index) => (
-                <div
-                  key={index}
-                  className="p-3 text-sm flex justify-between items-center hover:bg-muted/30 transition-colors gap-4 px-4"
-                  data-testid={`card-torrent-${index}`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate mb-1" title={torrent.title}>
-                      {torrent.title}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{formatDate(torrent.pubDate)}</span>
-                      <span>•</span>
-                      <span>{torrent.size ? formatBytes(torrent.size) : "-"}</span>
-                      <span>•</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-green-600 font-medium">{torrent.seeders ?? 0}</span>
-                        <span>/</span>
-                        <span className="text-red-600 font-medium">{torrent.leechers ?? 0}</span>
-                        <span>peers</span>
-                      </div>
-                      {torrent.description && (
-                        <>
-                          <span>•</span>
-                          <span className="truncate max-w-[300px]" title={torrent.description}>
-                            {torrent.description}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="w-[40px] text-right flex-shrink-0">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="inline-block" tabIndex={downloaders.length === 0 ? 0 : -1}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDownload(torrent)}
-                            disabled={downloaders.length === 0}
-                            className="h-8 w-8"
-                            data-testid={`button-download-${index}`}
-                            aria-label="Start download"
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
+              sortedItems.map((torrent, index) => {
+                const isUsenet = isUsenetItem(torrent);
+                return (
+                  <div
+                    key={index}
+                    className="p-3 text-sm flex justify-between items-center hover:bg-muted/30 transition-colors gap-4 px-4"
+                    data-testid={`card-torrent-${index}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="font-medium truncate flex-1" title={torrent.title}>
+                          {torrent.title}
                         </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>
-                          {downloaders.length === 0
-                            ? "Configure a downloader first"
-                            : "Start download"}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
+                        <Badge
+                          variant={isUsenet ? "secondary" : "default"}
+                          className="text-xs flex-shrink-0"
+                        >
+                          {isUsenet ? (
+                            <>
+                              <Newspaper className="h-3 w-3 mr-1" />
+                              USENET
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3 w-3 mr-1" />
+                              TORRENT
+                            </>
+                          )}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{formatDate(torrent.pubDate)}</span>
+                        <span>•</span>
+                        <span>{torrent.size ? formatBytes(torrent.size) : "-"}</span>
+                        <span>•</span>
+                        {isUsenet ? (
+                          <>
+                            {torrent.grabs !== undefined && (
+                              <>
+                                <span className="text-blue-600 font-medium">{torrent.grabs}</span>
+                                <span>grabs</span>
+                                {torrent.age !== undefined && <span>•</span>}
+                              </>
+                            )}
+                            {torrent.age !== undefined && (
+                              <>
+                                <span className="text-purple-600 font-medium">
+                                  {formatAge(torrent.age)}
+                                </span>
+                                <span>old</span>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <span className="text-green-600 font-medium">
+                              {torrent.seeders ?? 0}
+                            </span>
+                            <span>/</span>
+                            <span className="text-red-600 font-medium">
+                              {torrent.leechers ?? 0}
+                            </span>
+                            <span>peers</span>
+                          </div>
+                        )}
+                        {torrent.description && (
+                          <>
+                            <span>•</span>
+                            <span className="truncate max-w-[300px]" title={torrent.description}>
+                              {torrent.description}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="w-[40px] text-right flex-shrink-0">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            className="inline-block"
+                            tabIndex={downloaders.length === 0 ? 0 : -1}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDownload(torrent)}
+                              disabled={downloaders.length === 0}
+                              className="h-8 w-8"
+                              data-testid={`button-download-${index}`}
+                              aria-label="Start download"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            {downloaders.length === 0
+                              ? "Configure a downloader first"
+                              : "Start download"}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="p-8 text-center text-muted-foreground" data-testid="card-no-results">
                 <p className="font-medium text-foreground">No Results Found</p>
@@ -429,7 +496,7 @@ export default function SearchPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {downloaders.map((downloader) => (
+                        {filteredDownloaders.map((downloader) => (
                           <SelectItem
                             key={downloader.id}
                             value={downloader.id}

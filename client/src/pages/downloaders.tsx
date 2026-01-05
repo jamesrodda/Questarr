@@ -38,10 +38,19 @@ import { insertDownloaderSchema, type Downloader, type InsertDownloader } from "
 import { useToast } from "@/hooks/use-toast";
 
 const downloaderTypes = [
-  { value: "transmission", label: "Transmission" },
-  { value: "rtorrent", label: "rTorrent" },
-  { value: "qbittorrent", label: "qBittorrent" },
+  { value: "transmission", label: "Transmission", protocol: "torrent" },
+  { value: "rtorrent", label: "rTorrent", protocol: "torrent" },
+  { value: "qbittorrent", label: "qBittorrent", protocol: "torrent" },
+  { value: "sabnzbd", label: "SABnzbd", protocol: "usenet" },
+  { value: "nzbget", label: "NZBGet", protocol: "usenet" },
 ] as const;
+
+/**
+ * Check if a downloader type is for Usenet
+ */
+function isUsenetDownloader(type: string): boolean {
+  return ["sabnzbd", "nzbget"].includes(type);
+}
 
 export default function DownloadersPage() {
   const { toast } = useToast();
@@ -296,8 +305,9 @@ export default function DownloadersPage() {
         <div>
           <h1 className="text-3xl font-bold">Downloaders</h1>
           <p className="text-muted-foreground">
-            Manage torrent clients for automated downloads. Downloads are sent to enabled clients in
-            priority order (lowest number first), with automatic fallback if a client fails.
+            Manage torrent and Usenet clients for automated downloads. Downloads are sent to enabled
+            clients in priority order (lowest number first), with automatic fallback if a client
+            fails.
           </p>
         </div>
         <Button onClick={handleAdd} data-testid="button-add-downloader">
@@ -316,6 +326,12 @@ export default function DownloadersPage() {
                     <CardTitle className="text-lg">{downloader.name}</CardTitle>
                     <Badge variant="outline" className="capitalize">
                       {downloader.type}
+                    </Badge>
+                    <Badge
+                      variant={isUsenetDownloader(downloader.type) ? "secondary" : "default"}
+                      className="text-xs"
+                    >
+                      {isUsenetDownloader(downloader.type) ? "USENET" : "TORRENT"}
                     </Badge>
                     <Badge
                       variant={downloader.enabled ? "default" : "secondary"}
@@ -404,7 +420,7 @@ export default function DownloadersPage() {
           <DialogHeader>
             <DialogTitle>{editingDownloader ? "Edit Downloader" : "Add Downloader"}</DialogTitle>
             <DialogDescription>
-              Configure a torrent client for automated game downloads.
+              Configure a torrent or Usenet client for automated game downloads.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -460,7 +476,11 @@ export default function DownloadersPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        {form.watch("type") === "rtorrent" || form.watch("type") === "qbittorrent" || form.watch("type") === "transmission" ? "Host" : "URL"}
+                        {form.watch("type") === "rtorrent" ||
+                        form.watch("type") === "qbittorrent" ||
+                        form.watch("type") === "transmission"
+                          ? "Host"
+                          : "URL"}
                       </FormLabel>
                       <FormControl>
                         <Input
@@ -473,13 +493,17 @@ export default function DownloadersPage() {
                                   ? "localhost or 192.168.1.100"
                                   : form.watch("type") === "sabnzbd"
                                     ? "http://localhost:8080"
-                                    : "http://localhost:6789"
+                                    : form.watch("type") === "nzbget"
+                                      ? "http://localhost:6789"
+                                      : "http://localhost:9091/transmission/rpc"
                           }
                           {...field}
                           data-testid="input-downloader-url"
                         />
                       </FormControl>
-                      {(form.watch("type") === "rtorrent" || form.watch("type") === "qbittorrent" || form.watch("type") === "transmission") && (
+                      {(form.watch("type") === "rtorrent" ||
+                        form.watch("type") === "qbittorrent" ||
+                        form.watch("type") === "transmission") && (
                         <FormDescription className="text-xs">
                           Enter hostname or IP address without protocol or port
                         </FormDescription>
@@ -488,7 +512,9 @@ export default function DownloadersPage() {
                     </FormItem>
                   )}
                 />
-                {(form.watch("type") === "rtorrent" || form.watch("type") === "qbittorrent" || form.watch("type") === "transmission") && (
+                {(form.watch("type") === "rtorrent" ||
+                  form.watch("type") === "qbittorrent" ||
+                  form.watch("type") === "transmission") && (
                   <>
                     <FormField
                       control={form.control}
@@ -539,7 +565,7 @@ export default function DownloadersPage() {
                                 checked={!!field.value}
                                 onCheckedChange={field.onChange}
                                 data-testid="checkbox-downloader-usessl"
-                            />
+                              />
                             </FormControl>
                           </FormItem>
                         )}
@@ -578,18 +604,29 @@ export default function DownloadersPage() {
                       <FormLabel>
                         {form.watch("type") === "sabnzbd"
                           ? "API Key"
-                          : form.watch("type") === "qbittorrent" || form.watch("type") === "transmission"
+                          : form.watch("type") === "qbittorrent" ||
+                              form.watch("type") === "transmission" ||
+                              form.watch("type") === "nzbget"
                             ? "Username"
                             : "Username (Optional)"}
                       </FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter username"
+                          placeholder={
+                            form.watch("type") === "sabnzbd"
+                              ? "Enter SABnzbd API key"
+                              : "Enter username"
+                          }
                           {...field}
                           value={field.value || ""}
                           data-testid="input-downloader-username"
                         />
                       </FormControl>
+                      {form.watch("type") === "sabnzbd" && (
+                        <FormDescription className="text-xs">
+                          Found in SABnzbd Config → General → API Key
+                        </FormDescription>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -600,7 +637,11 @@ export default function DownloadersPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        {form.watch("type") === "qbittorrent" || form.watch("type") === "transmission" ? "Password" : "Password (Optional)"}
+                        {form.watch("type") === "qbittorrent" ||
+                        form.watch("type") === "transmission" ||
+                        form.watch("type") === "nzbget"
+                          ? "Password"
+                          : "Password (Optional)"}
                       </FormLabel>
                       <FormControl>
                         <Input
@@ -652,7 +693,7 @@ export default function DownloadersPage() {
                           ? "Adding a category avoids conflicts with unrelated downloads"
                           : form.watch("type") === "transmission"
                             ? "Creates a subdirectory in the output directory. Label for torrents in downloader"
-                            : isUsenetDownloader(form.watch("type"))
+                            : form.watch("type") === "sabnzbd" || form.watch("type") === "nzbget"
                               ? "Category for NZBs in downloader"
                               : "Label for torrents in downloader"}
                       </FormDescription>
@@ -693,16 +734,14 @@ export default function DownloadersPage() {
                               form.setValue("settings", JSON.stringify(settings));
                             }
                           }}
-                          value={
-                            (() => {
-                              try {
-                                const settings = JSON.parse(form.watch("settings") || "{}");
-                                return settings.initialState || (field.value ? "stopped" : "started");
-                              } catch {
-                                return field.value ? "stopped" : "started";
-                              }
-                            })()
-                          }
+                          value={(() => {
+                            try {
+                              const settings = JSON.parse(form.watch("settings") || "{}");
+                              return settings.initialState || (field.value ? "stopped" : "started");
+                            } catch {
+                              return field.value ? "stopped" : "started";
+                            }
+                          })()}
                         >
                           <FormControl>
                             <SelectTrigger data-testid="select-initial-state">
@@ -777,66 +816,66 @@ export default function DownloadersPage() {
                         <FormField
                           control={form.control}
                           name="addStopped"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-2 bg-background">
-                            <div className="space-y-0">
-                              <FormLabel className="text-sm">Add Stopped</FormLabel>
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-2 bg-background">
+                              <div className="space-y-0">
+                                <FormLabel className="text-sm">Add Stopped</FormLabel>
+                                <FormDescription className="text-xs">
+                                  Add torrents in paused state
+                                </FormDescription>
+                              </div>
+                              <FormControl>
+                                <Checkbox
+                                  checked={!!field.value}
+                                  onCheckedChange={field.onChange}
+                                  data-testid="checkbox-downloader-addstopped"
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="removeCompleted"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-2 bg-background">
+                              <div className="space-y-0">
+                                <FormLabel className="text-sm">Remove Completed</FormLabel>
+                                <FormDescription className="text-xs">
+                                  Remove torrents from downloader after completion
+                                </FormDescription>
+                              </div>
+                              <FormControl>
+                                <Checkbox
+                                  checked={!!field.value}
+                                  onCheckedChange={field.onChange}
+                                  data-testid="checkbox-downloader-removecompleted"
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="postImportCategory"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Post-Import Category (Optional)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="completed-games"
+                                  {...field}
+                                  value={field.value || ""}
+                                  data-testid="input-downloader-postimportcategory"
+                                />
+                              </FormControl>
                               <FormDescription className="text-xs">
-                                Add torrents in paused state
+                                Category after download completes
                               </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Checkbox
-                                checked={!!field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid="checkbox-downloader-addstopped"
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="removeCompleted"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-2 bg-background">
-                            <div className="space-y-0">
-                              <FormLabel className="text-sm">Remove Completed</FormLabel>
-                              <FormDescription className="text-xs">
-                                Remove torrents from downloader after completion
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Checkbox
-                                checked={!!field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid="checkbox-downloader-removecompleted"
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="postImportCategory"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Post-Import Category (Optional)</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="completed-games"
-                                {...field}
-                                value={field.value || ""}
-                                data-testid="input-downloader-postimportcategory"
-                              />
-                            </FormControl>
-                            <FormDescription className="text-xs">
-                              Category after download completes
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </>
                     )}
                   </div>

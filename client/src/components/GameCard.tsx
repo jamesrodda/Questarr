@@ -1,12 +1,13 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Info, Star, Calendar, Eye, EyeOff } from "lucide-react";
+import { Download, Info, Star, Calendar, Eye, EyeOff, PackageCheck } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import StatusBadge, { type GameStatus } from "./StatusBadge";
 import { type Game } from "@shared/schema";
-import { useState, memo } from "react";
+import { useState, memo, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import GameDetailsModal from "./GameDetailsModal";
 import GameDownloadDialog from "./GameDownloadDialog";
 
@@ -58,7 +59,59 @@ const GameCard = ({
 }: GameCardProps) => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const releaseStatus = getReleaseStatus(game);
+
+  // Use Intersection Observer to detect when card is visible in viewport
+  // This prevents making API calls for games that aren't visible on screen
+  useEffect(() => {
+    const currentRef = cardRef.current;
+    if (!currentRef) return;
+
+    // Only observe wanted games that need torrent availability check
+    const shouldObserve = !isDiscovery && game.status === "wanted" && !!game.title;
+    if (!shouldObserve) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !isVisible) {
+            setIsVisible(true);
+            // Once visible, we don't need to observe anymore
+            observer.disconnect();
+          }
+        });
+      },
+      {
+        // Start loading slightly before the card becomes visible
+        rootMargin: "100px",
+        threshold: 0.01,
+      }
+    );
+
+    observer.observe(currentRef);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isDiscovery, game.status, game.title, isVisible]);
+
+  // Check for torrent availability for wanted games - only when visible
+  // This prevents hundreds of simultaneous API requests when loading a page with many wanted games
+  const { data: searchResults } = useQuery({
+    queryKey: ["/api/search", game.title],
+    queryFn: async () => {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(game.title)}&limit=1`);
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: !isDiscovery && game.status === "wanted" && !!game.title && isVisible,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
+  });
+
+  const hasTorrentsAvailable = searchResults?.items && searchResults.items.length > 0;
 
   const handleStatusClick = () => {
     console.warn(`Status change triggered for game: ${game.title}`);
@@ -84,6 +137,7 @@ const GameCard = ({
 
   return (
     <Card
+      ref={cardRef}
       className={`group hover-elevate transition-all duration-200 max-w-[225px] mx-auto w-full ${game.hidden ? "opacity-60 grayscale" : ""}`}
       data-testid={`card-game-${game.id}`}
     >
@@ -99,6 +153,21 @@ const GameCard = ({
         />
         <div className="absolute top-2 right-2 flex flex-col gap-1">
           {!isDiscovery && game.status && <StatusBadge status={game.status} />}
+          {game.status === "wanted" && hasTorrentsAvailable && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="default"
+                  className="text-xs bg-emerald-600 hover:bg-emerald-700 border-emerald-700 p-1 h-6 w-6 flex items-center justify-center cursor-help"
+                >
+                  <PackageCheck className="w-3 h-3" />
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Downloads Available</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           {game.status === "wanted" && (
             <Badge
               variant={releaseStatus.variant}

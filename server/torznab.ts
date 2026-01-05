@@ -16,6 +16,8 @@ interface TorznabItem {
   guid?: string;
   comments?: string;
   attributes?: { [key: string]: string };
+  indexerId?: string;
+  indexerName?: string;
 }
 
 interface TorznabSearchParams {
@@ -70,7 +72,7 @@ export class TorznabClient {
       }
 
       const xmlData = await response.text();
-      return this.parseResponse(xmlData, indexer.url);
+      return this.parseResponse(xmlData, indexer.url, indexer);
     } catch (error) {
       torznabLogger.error({ indexerName: indexer.name, error }, `error searching indexer`);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -200,7 +202,7 @@ export class TorznabClient {
   /**
    * Parse Torznab XML response
    */
-  private parseResponse(xmlData: string, indexerUrl: string): TorznabResponse {
+  private parseResponse(xmlData: string, indexerUrl: string, indexer?: Indexer): TorznabResponse {
     try {
       const parsed = this.parser.parse(xmlData);
 
@@ -213,7 +215,7 @@ export class TorznabClient {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const torznabItems: TorznabItem[] = items.map((item: any) =>
-        this.parseItem(item, indexerUrl)
+        this.parseItem(item, indexerUrl, indexer)
       );
 
       return {
@@ -233,12 +235,14 @@ export class TorznabClient {
    */
   // XML parsing requires any due to dynamic structure
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private parseItem(item: any, indexerUrl: string): TorznabItem {
+  private parseItem(item: any, indexerUrl: string, indexer?: Indexer): TorznabItem {
     const torznabItem: TorznabItem = {
       title: item.title || "Unknown",
       link: item.link || item.guid || "",
       pubDate: item.pubDate || new Date().toISOString(),
       description: item.description,
+      indexerId: indexer?.id,
+      indexerName: indexer?.name,
     };
 
     // Parse enclosure for download link and size

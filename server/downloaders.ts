@@ -8,6 +8,7 @@ import type {
 import { downloadersLogger } from "./logger.js";
 import crypto from "crypto";
 import parseTorrent from "parse-torrent";
+import { XMLParser } from "fast-xml-parser";
 
 // Type definitions for API responses
 interface TransmissionTorrent {
@@ -110,6 +111,7 @@ interface DownloadRequest {
   category?: string;
   downloadPath?: string;
   priority?: number;
+  downloadType?: "torrent" | "usenet";
 }
 
 interface DownloaderClient {
@@ -130,6 +132,24 @@ class TransmissionClient implements DownloaderClient {
 
   constructor(downloader: Downloader) {
     this.downloader = downloader;
+  }
+
+  private getBaseUrl(): string {
+    let baseUrl = this.downloader.url;
+    if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+      const protocol = this.downloader.useSsl ? "https://" : "http://";
+      baseUrl = protocol + baseUrl;
+    }
+
+    try {
+      const urlObj = new URL(baseUrl);
+      if (this.downloader.port) {
+        urlObj.port = this.downloader.port.toString();
+      }
+      return urlObj.toString().replace(/\/$/, "");
+    } catch {
+      return baseUrl.replace(/\/$/, "");
+    }
   }
 
   async testConnection(): Promise<{ success: boolean; message: string }> {
@@ -167,15 +187,18 @@ class TransmissionClient implements DownloaderClient {
 
       // Check if it's a magnet link or a URL that needs downloading
       const isMagnet = request.url.startsWith("magnet:");
-      
+
       if (isMagnet) {
         args.filename = request.url;
       } else {
         // Download the .torrent file locally first
         // This is necessary because Transmission might not have access to the indexer (e.g. private trackers)
         try {
-          downloadersLogger.debug({ url: request.url }, "Downloading torrent file locally for Transmission");
-          
+          downloadersLogger.debug(
+            { url: request.url },
+            "Downloading torrent file locally for Transmission"
+          );
+
           const fetchTorrent = async (url: string) => {
             return fetch(url, {
               headers: {
@@ -193,10 +216,10 @@ class TransmissionClient implements DownloaderClient {
             if (response.status === 400 && request.url.includes("+")) {
               const fixedUrl = request.url.replace(/\+/g, "%20");
               response = await fetchTorrent(fixedUrl);
-              
+
               if (!response.ok && request.url.includes("&file=")) {
-                 const urlNoFile = request.url.split("&file=")[0];
-                 response = await fetchTorrent(urlNoFile);
+                const urlNoFile = request.url.split("&file=")[0];
+                response = await fetchTorrent(urlNoFile);
               }
             }
           }
@@ -204,7 +227,7 @@ class TransmissionClient implements DownloaderClient {
           if (response.ok) {
             const arrayBuffer = await response.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
-            
+
             // Try to parse hash for immediate return
             try {
               const parsed = await parseTorrent(buffer);
@@ -221,11 +244,16 @@ class TransmissionClient implements DownloaderClient {
             args.metainfo = buffer.toString("base64");
           } else {
             // Fallback to passing URL directly if download fails
-            downloadersLogger.warn("Failed to download torrent file locally, passing URL to Transmission");
+            downloadersLogger.warn(
+              "Failed to download torrent file locally, passing URL to Transmission"
+            );
             args.filename = request.url;
           }
         } catch (error) {
-          downloadersLogger.error({ error }, "Error downloading torrent file, passing URL to Transmission");
+          downloadersLogger.error(
+            { error },
+            "Error downloading torrent file, passing URL to Transmission"
+          );
           args.filename = request.url;
         }
       }
@@ -233,16 +261,16 @@ class TransmissionClient implements DownloaderClient {
       // Handle download path with category subdirectory
       let downloadPath = request.downloadPath || this.downloader.downloadPath;
       const category = request.category || this.downloader.category;
-      
+
       if (downloadPath && category) {
         // Transmission doesn't have native category support, but we can create subdirectories
         downloadPath = `${downloadPath}/${category}`;
       }
-      
+
       if (downloadPath) {
         args["download-dir"] = downloadPath;
       }
-      
+
       // Add label/category if supported (Transmission 2.8+)
       if (category) {
         args["labels"] = [category];
@@ -284,11 +312,12 @@ class TransmissionClient implements DownloaderClient {
         };
       } else if (response.arguments["torrent-duplicate"]) {
         const torrent = response.arguments["torrent-duplicate"];
-        // Return success for duplicates so we can link them, but with a message
+        // Return success: true for duplicates to prevent fallback mechanism from trying other downloaders
+        // as the user likely intends for this specific downloader to handle it (or it's already there)
         return {
           success: true,
           id: torrent.hashString || torrent.id?.toString(),
-          message: "Torrent already exists",
+          message: "Torrent already exists (Transmission)",
         };
       } else {
         return {
@@ -614,24 +643,18 @@ class TransmissionClient implements DownloaderClient {
   // Transmission API response structure
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async makeRequest(method: string, arguments_: any): Promise<any> {
-    // Construct URL with protocol + host + port (similar to qBittorrent)
-    const protocol = this.downloader.useSsl ? "https" : "http";
-    const port = this.downloader.port || (this.downloader.useSsl ? 443 : 80);
-    const host = this.downloader.url.replace(/\/$/, "");
-    
-    // Default path is /transmission/rpc
-    let rpcPath = this.downloader.urlPath || "/transmission/rpc";
-    if (!rpcPath.startsWith("/")) {
-      rpcPath = "/" + rpcPath;
+    const baseUrl = this.getBaseUrl();
+
+    // If the base URL doesn't already contain /transmission/rpc, append it
+    let url = baseUrl;
+    if (!url.includes("/transmission/rpc")) {
+      url += "/transmission/rpc";
     }
-    
-    const url = `${protocol}://${host}:${port}${rpcPath}`;
 
     const body = {
       method,
       arguments: arguments_,
     };
-
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "User-Agent": "Questarr/1.0",
@@ -1774,7 +1797,7 @@ class QBittorrentClient implements DownloaderClient {
         sequential?: boolean;
         firstLastPriority?: boolean;
       } = {};
-      
+
       try {
         if (this.downloader.settings) {
           qbSettings = JSON.parse(this.downloader.settings);
@@ -1808,14 +1831,17 @@ class QBittorrentClient implements DownloaderClient {
         formData.append("paused", "false");
       }
 
-      downloadersLogger.info({
-        url: request.url,
-        savepath: request.downloadPath || this.downloader.downloadPath,
-        category: request.category || this.downloader.category,
-        paused: formData.get("paused"),
-        initialState: qbSettings.initialState,
-        allParams: formData.toString(),
-      }, "Adding torrent to qBittorrent with parameters");
+      downloadersLogger.info(
+        {
+          url: request.url,
+          savepath: request.downloadPath || this.downloader.downloadPath,
+          category: request.category || this.downloader.category,
+          paused: formData.get("paused"),
+          initialState: qbSettings.initialState,
+          allParams: formData.toString(),
+        },
+        "Adding torrent to qBittorrent with parameters"
+      );
 
       const response = await this.makeRequest("POST", "/api/v2/torrents/add", formData.toString(), {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -1827,52 +1853,74 @@ class QBittorrentClient implements DownloaderClient {
       if (response.ok && (responseText === "Ok." || responseText === "")) {
         // Try to extract hash from URL (works for magnet links)
         const hash = extractHashFromUrl(request.url);
-        
+
         if (!hash) {
           // For torrent file URLs (HTTP/HTTPS), we can't extract hash beforehand
           // qBittorrent will calculate it after downloading the file
           // Wait for qBittorrent to process the torrent file and get the hash
-          downloadersLogger.debug({ url: request.url }, "Torrent file URL added, waiting for hash...");
-          
+          downloadersLogger.debug(
+            { url: request.url },
+            "Torrent file URL added, waiting for hash..."
+          );
+
           // Wait a bit longer for qBittorrent to download and process the torrent file
           await new Promise((resolve) => setTimeout(resolve, 2000));
-          
+
           // Get all torrents and find the newly added one by name/title
           const allTorrentsResponse = await this.makeRequest("GET", "/api/v2/torrents/info");
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const allTorrents = (await allTorrentsResponse.json()) as any[];
-          
+
           // Try to find the torrent by matching title/name
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const matchingTorrent = allTorrents.find((t: any) => 
-            t.name && request.title && (
-              t.name.toLowerCase().includes(request.title.toLowerCase()) ||
-              request.title.toLowerCase().includes(t.name.toLowerCase())
-            )
+          const matchingTorrent = allTorrents.find(
+            (
+              t: any // eslint-disable-line @typescript-eslint/no-explicit-any
+            ) =>
+              t.name &&
+              request.title &&
+              (t.name.toLowerCase().includes(request.title.toLowerCase()) ||
+                request.title.toLowerCase().includes(t.name.toLowerCase()))
           );
-          
+
           if (matchingTorrent && matchingTorrent.hash) {
-            downloadersLogger.info({ hash: matchingTorrent.hash, name: matchingTorrent.name }, "Found torrent hash after adding");
-            
+            downloadersLogger.info(
+              { hash: matchingTorrent.hash, name: matchingTorrent.name },
+              "Found torrent hash after adding"
+            );
+
             // Handle force-started state after adding
             if (qbSettings.initialState === "force-started") {
               try {
-                await this.makeRequest("POST", "/api/v2/torrents/setForceStart", `hashes=${matchingTorrent.hash}&value=true`, {
-                  "Content-Type": "application/x-www-form-urlencoded",
-                });
-                downloadersLogger.info({ hash: matchingTorrent.hash }, "Set torrent to force-started mode");
+                await this.makeRequest(
+                  "POST",
+                  "/api/v2/torrents/setForceStart",
+                  `hashes=${matchingTorrent.hash}&value=true`,
+                  {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  }
+                );
+                downloadersLogger.info(
+                  { hash: matchingTorrent.hash },
+                  "Set torrent to force-started mode"
+                );
               } catch (error) {
-                downloadersLogger.warn({ hash: matchingTorrent.hash, error }, "Failed to set force-started mode");
+                downloadersLogger.warn(
+                  { hash: matchingTorrent.hash, error },
+                  "Failed to set force-started mode"
+                );
               }
             }
-            
+
             return {
               success: true,
               id: matchingTorrent.hash,
               message: "Torrent added successfully",
             };
           } else {
-            downloadersLogger.warn({ title: request.title, torrentCount: allTorrents.length }, "Could not find matching torrent after adding");
+            downloadersLogger.warn(
+              { title: request.title, torrentCount: allTorrents.length },
+              "Could not find matching torrent after adding"
+            );
             // Return success but without hash - will need manual verification
             return {
               success: true,
@@ -1887,26 +1935,37 @@ class QBittorrentClient implements DownloaderClient {
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         // Verify the torrent was actually added
-        const verifyResponse = await this.makeRequest("GET", `/api/v2/torrents/info?hashes=${hash}`);
+        const verifyResponse = await this.makeRequest(
+          "GET",
+          `/api/v2/torrents/info?hashes=${hash}`
+        );
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const torrents = (await verifyResponse.json()) as any[];
 
         if (torrents && torrents.length > 0) {
-          downloadersLogger.info({ hash, name: torrents[0].name }, "Torrent verified in qBittorrent");
-          
+          downloadersLogger.info(
+            { hash, name: torrents[0].name },
+            "Torrent verified in qBittorrent"
+          );
+
           // Handle force-started state after adding
           if (qbSettings.initialState === "force-started") {
             try {
-              await this.makeRequest("POST", "/api/v2/torrents/setForceStart", `hashes=${hash}&value=true`, {
-                "Content-Type": "application/x-www-form-urlencoded",
-              });
+              await this.makeRequest(
+                "POST",
+                "/api/v2/torrents/setForceStart",
+                `hashes=${hash}&value=true`,
+                {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                }
+              );
               downloadersLogger.info({ hash }, "Set torrent to force-started mode");
             } catch (error) {
               downloadersLogger.warn({ hash, error }, "Failed to set force-started mode");
               // Don't fail the whole operation if this fails
             }
           }
-          
+
           return {
             success: true,
             id: hash,
@@ -1920,10 +1979,15 @@ class QBittorrentClient implements DownloaderClient {
           };
         }
       } else if (responseText === "Fails.") {
-        downloadersLogger.warn({ url: request.url }, "qBittorrent rejected torrent (already exists or invalid)");
+        downloadersLogger.warn(
+          { url: request.url },
+          "qBittorrent rejected torrent (already exists or invalid)"
+        );
+        // Return success: true for duplicates/failures to prevent fallback mechanism from trying other downloaders
+        // "Fails." usually means it's already in the list or invalid metadata
         return {
-          success: false,
-          message: "Torrent already exists or invalid torrent",
+          success: true,
+          message: "Torrent already exists or invalid torrent (qBittorrent)",
         };
       } else {
         downloadersLogger.error({ responseText }, "Unexpected response from qBittorrent");
@@ -2053,10 +2117,10 @@ class QBittorrentClient implements DownloaderClient {
       const transferInfo = await transferResponse.json();
 
       downloadersLogger.debug(
-        { 
-          savePath, 
+        {
+          savePath,
           freeSpace: transferInfo.free_space_on_disk,
-          transferInfo: Object.keys(transferInfo)
+          transferInfo: Object.keys(transferInfo),
         },
         "qBittorrent free space info"
       );
@@ -2150,8 +2214,11 @@ class QBittorrentClient implements DownloaderClient {
     }
 
     const url = this.getBaseUrl() + "/api/v2/auth/login";
-    
-    downloadersLogger.debug({ url, username: this.downloader.username }, "Attempting qBittorrent authentication");
+
+    downloadersLogger.debug(
+      { url, username: this.downloader.username },
+      "Attempting qBittorrent authentication"
+    );
 
     const formData = new URLSearchParams();
     formData.append("username", this.downloader.username);
@@ -2188,13 +2255,19 @@ class QBittorrentClient implements DownloaderClient {
           this.cookie = `SID=${match[1]}`;
         }
       }
-      
-      downloadersLogger.debug({ hasCookie: !!this.cookie }, "qBittorrent authentication successful");
+
+      downloadersLogger.debug(
+        { hasCookie: !!this.cookie },
+        "qBittorrent authentication successful"
+      );
     } catch (error) {
-      downloadersLogger.error({ 
-        error: error instanceof Error ? { message: error.message, cause: error.cause } : error,
-        url 
-      }, "qBittorrent authentication error");
+      downloadersLogger.error(
+        {
+          error: error instanceof Error ? { message: error.message, cause: error.cause } : error,
+          url,
+        },
+        "qBittorrent authentication error"
+      );
       throw error;
     }
   }
@@ -2292,6 +2365,10 @@ export class DownloaderManager {
         return new RTorrentClient(downloader);
       case "qbittorrent":
         return new QBittorrentClient(downloader);
+      case "sabnzbd":
+        return new SABnzbdClient(downloader);
+      case "nzbget":
+        return new NZBGetClient(downloader);
       default:
         throw new Error(`Unsupported downloader type: ${downloader.type}`);
     }
@@ -2448,7 +2525,25 @@ export class DownloaderManager {
     const attemptedDownloaders: string[] = [];
     const errors: string[] = [];
 
-    for (const downloader of downloaders) {
+    // Filter downloaders by compatibility if downloadType is specified
+    let compatibleDownloaders = downloaders;
+    if (request.downloadType === "usenet") {
+      compatibleDownloaders = downloaders.filter((d) => ["sabnzbd", "nzbget"].includes(d.type));
+    } else if (request.downloadType === "torrent") {
+      compatibleDownloaders = downloaders.filter((d) =>
+        ["transmission", "rtorrent", "qbittorrent"].includes(d.type)
+      );
+    }
+
+    if (compatibleDownloaders.length === 0) {
+      return {
+        success: false,
+        message: `No compatible downloaders found for type: ${request.downloadType || "unknown"}`,
+        attemptedDownloaders: [],
+      };
+    }
+
+    for (const downloader of compatibleDownloaders) {
       attemptedDownloaders.push(downloader.name);
 
       try {
@@ -2476,6 +2571,948 @@ export class DownloaderManager {
       message: `All downloaders failed. Errors: ${errors.join("; ")}`,
       attemptedDownloaders,
     };
+  }
+}
+
+// ==================== SABnzbd Client ====================
+
+interface SABnzbdQueue {
+  slots: Array<{
+    nzo_id: string;
+    filename: string;
+    status: string;
+    percentage: string;
+    mb: string;
+    mbleft: string;
+    mbmissing: string;
+    size: string;
+    sizeleft: string;
+    timeleft: string;
+    eta: string;
+    cat: string;
+    priority: string;
+    script: string;
+    avg_age: string;
+  }>;
+  speed: string;
+  size: string;
+  sizeleft: string;
+  mb: string;
+  mbleft: string;
+  noofslots: number;
+  status: string;
+  timeleft: string;
+}
+
+interface SABnzbdHistory {
+  slots: Array<{
+    nzo_id: string;
+    name: string;
+    status: string;
+    fail_message: string;
+    path: string;
+    size: string;
+    bytes: number;
+    category: string;
+    download_time: number;
+    completed: number;
+    action_line: string;
+    stage_log: Array<{
+      name: string;
+      actions: string[];
+    }>;
+  }>;
+}
+
+class SABnzbdClient implements DownloaderClient {
+  private downloader: Downloader;
+
+  constructor(downloader: Downloader) {
+    this.downloader = downloader;
+  }
+
+  private getBaseUrl(): string {
+    let baseUrl = this.downloader.url;
+    if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+      const protocol = this.downloader.useSsl ? "https://" : "http://";
+      baseUrl = protocol + baseUrl;
+    }
+
+    try {
+      const urlObj = new URL(baseUrl);
+      if (this.downloader.port) {
+        urlObj.port = this.downloader.port.toString();
+      }
+      return urlObj.toString().replace(/\/$/, "");
+    } catch {
+      return baseUrl.replace(/\/$/, "");
+    }
+  }
+
+  private getApiUrl(mode: string, params: Record<string, string> = {}): string {
+    const baseUrl = this.getBaseUrl();
+    const url = new URL(`${baseUrl}/api`);
+    url.searchParams.set("apikey", this.downloader.username || "");
+    url.searchParams.set("mode", mode);
+    url.searchParams.set("output", "json");
+
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
+
+    return url.toString();
+  }
+
+  async testConnection(): Promise<{ success: boolean; message: string }> {
+    const url = this.getApiUrl("version");
+    try {
+      downloadersLogger.debug({ url }, "Testing SABnzbd connection");
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "No error details");
+        return {
+          success: false,
+          message: `HTTP ${response.status}: ${response.statusText} - ${errorText}`,
+        };
+      }
+
+      const data = await response.json();
+      if (data.version) {
+        return { success: true, message: `Connected to SABnzbd v${data.version}` };
+      }
+
+      return { success: false, message: "Invalid SABnzbd response - missing version field" };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      downloadersLogger.error({ error, url }, "SABnzbd connection test failed");
+      return {
+        success: false,
+        message: `Failed to connect to SABnzbd at ${url}: ${errorMessage}`,
+      };
+    }
+  }
+
+  async addTorrent(
+    request: DownloadRequest
+  ): Promise<{ success: boolean; id?: string; message: string }> {
+    const url = this.getApiUrl("addurl", {
+      name: request.url,
+      nzbname: request.title,
+      cat: request.category || "games",
+      priority: (request.priority || 0).toString(),
+    });
+
+    try {
+      const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(30000) });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "No error details");
+        return { success: false, message: `HTTP ${response.status}: ${errorText}` };
+      }
+
+      const data = await response.json();
+
+      if (data.status === true) {
+        if (data.nzo_ids && data.nzo_ids.length > 0) {
+          return {
+            success: true,
+            id: data.nzo_ids[0],
+            message: "NZB added successfully",
+          };
+        } else {
+          // Status true but no ID usually means duplicate in SABnzbd (or merged)
+          return {
+            success: true,
+            message: "NZB added successfully (likely duplicate or merged)",
+          };
+        }
+      }
+
+      // Check for specific duplicate error
+      if (
+        data.error &&
+        typeof data.error === "string" &&
+        data.error.toLowerCase().includes("duplicate")
+      ) {
+        return {
+          success: true,
+          message: `NZB already exists: ${data.error}`,
+        };
+      }
+
+      return {
+        success: false,
+        message: data.error || "Failed to add NZB - SABnzbd returned success:false",
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: false,
+        message: `Failed to add NZB to SABnzbd: ${errorMessage}`,
+      };
+    }
+  }
+
+  async getTorrentStatus(id: string): Promise<DownloadStatus | null> {
+    try {
+      const url = this.getApiUrl("queue");
+      const response = await fetch(url);
+      const data = await response.json();
+      const queue: SABnzbdQueue = data.queue;
+
+      const item = queue.slots.find((slot) => slot.nzo_id === id);
+      if (!item) {
+        // Check history if not in queue
+        return await this.getFromHistory(id);
+      }
+
+      const progress = parseFloat(item.percentage) || 0;
+      const totalMB = parseFloat(item.mb) || 0;
+      const leftMB = parseFloat(item.mbleft) || 0;
+      const downloadedMB = totalMB - leftMB;
+
+      // Parse ETA (format: "HH:MM:SS" or "00:00:00" or "unknown")
+      let eta: number | undefined;
+      if (item.timeleft && item.timeleft !== "0:00:00" && item.timeleft !== "unknown") {
+        const [hours, minutes, seconds] = item.timeleft.split(":").map(Number);
+        eta = hours * 3600 + minutes * 60 + seconds;
+      }
+
+      // Map SABnzbd status to our status
+      let status: DownloadStatus["status"];
+      let repairStatus: DownloadStatus["repairStatus"];
+      let unpackStatus: DownloadStatus["unpackStatus"];
+
+      switch (item.status.toLowerCase()) {
+        case "downloading":
+        case "fetching":
+          status = "downloading";
+          break;
+        case "paused":
+          status = "paused";
+          break;
+        case "repairing":
+          status = "repairing";
+          repairStatus = "repairing";
+          break;
+        case "extracting":
+        case "unpacking":
+          status = "unpacking";
+          unpackStatus = "unpacking";
+          break;
+        case "completed":
+          status = "completed";
+          repairStatus = "good";
+          unpackStatus = "completed";
+          break;
+        case "failed":
+          status = "error";
+          repairStatus = "failed";
+          break;
+        default:
+          status = "downloading";
+      }
+
+      return {
+        id: item.nzo_id,
+        name: item.filename,
+        downloadType: "usenet",
+        status,
+        progress,
+        downloadSpeed: (parseFloat(queue.speed) || 0) * 1024 * 1024, // Convert MB/s to bytes/s
+        eta,
+        size: totalMB * 1024 * 1024, // Convert MB to bytes
+        downloaded: downloadedMB * 1024 * 1024,
+        category: item.cat,
+        repairStatus,
+        unpackStatus,
+        age: parseFloat(item.avg_age) || undefined,
+      };
+    } catch (error) {
+      downloadersLogger.error({ error }, "Failed to get SABnzbd status");
+      return null;
+    }
+  }
+
+  private async getFromHistory(id: string): Promise<DownloadStatus | null> {
+    try {
+      const url = this.getApiUrl("history");
+      const response = await fetch(url);
+      const data = await response.json();
+      const history: SABnzbdHistory = data.history;
+
+      const item = history.slots.find((slot) => slot.nzo_id === id);
+      if (!item) {
+        return null;
+      }
+
+      let status: DownloadStatus["status"];
+      let repairStatus: DownloadStatus["repairStatus"];
+      let unpackStatus: DownloadStatus["unpackStatus"];
+
+      if (item.status === "Completed") {
+        status = "completed";
+        repairStatus = "good";
+        unpackStatus = "completed";
+      } else if (item.status === "Failed") {
+        status = "error";
+        repairStatus = "failed";
+      } else {
+        status = "paused";
+      }
+
+      return {
+        id: item.nzo_id,
+        name: item.name,
+        downloadType: "usenet",
+        status,
+        progress: status === "completed" ? 100 : 0,
+        size: item.bytes,
+        downloaded: item.bytes,
+        category: item.category,
+        error: status === "error" ? item.fail_message : undefined,
+        repairStatus,
+        unpackStatus,
+      };
+    } catch (error) {
+      downloadersLogger.error({ error }, "Failed to get SABnzbd history");
+      return null;
+    }
+  }
+
+  async getTorrentDetails(id: string): Promise<TorrentDetails | null> {
+    const status = await this.getTorrentStatus(id);
+    if (!status) return null;
+
+    // SABnzbd doesn't provide detailed file information in the same way
+    // Return minimal details based on status
+    return {
+      ...status,
+      files: [],
+      trackers: [],
+    };
+  }
+
+  async getAllTorrents(): Promise<DownloadStatus[]> {
+    try {
+      const url = this.getApiUrl("queue");
+      const response = await fetch(url);
+      const data = await response.json();
+      const queue: SABnzbdQueue = data.queue;
+
+      const results: DownloadStatus[] = [];
+
+      for (const item of queue.slots) {
+        const status = await this.getTorrentStatus(item.nzo_id);
+        if (status) {
+          results.push(status);
+        }
+      }
+
+      return results;
+    } catch (error) {
+      downloadersLogger.error({ error }, "Failed to get SABnzbd queue");
+      return [];
+    }
+  }
+
+  async pauseTorrent(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const url = this.getApiUrl("pause", { value: id });
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status === true) {
+        return { success: true, message: "NZB paused" };
+      }
+
+      return { success: false, message: "Failed to pause NZB" };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async resumeTorrent(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const url = this.getApiUrl("resume", { value: id });
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status === true) {
+        return { success: true, message: "NZB resumed" };
+      }
+
+      return { success: false, message: "Failed to resume NZB" };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async removeTorrent(
+    id: string,
+    _deleteFiles?: boolean
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const url = this.getApiUrl("queue", { name: "delete", value: id });
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status === true) {
+        return { success: true, message: "NZB removed" };
+      }
+
+      return { success: false, message: "Failed to remove NZB" };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async getFreeSpace(): Promise<number> {
+    try {
+      const url = this.getApiUrl("queue");
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.queue?.diskspace1_norm) {
+        // Parse disk space (format: "123.45 GB")
+        const match = data.queue.diskspace1_norm.match(/([0-9.]+)\s*([KMGT]?B)/i);
+        if (match) {
+          const value = parseFloat(match[1]);
+          const unit = match[2].toUpperCase();
+
+          const multipliers: Record<string, number> = {
+            B: 1,
+            KB: 1024,
+            MB: 1024 * 1024,
+            GB: 1024 * 1024 * 1024,
+            TB: 1024 * 1024 * 1024 * 1024,
+          };
+
+          return value * (multipliers[unit] || 1);
+        }
+      }
+
+      return 0;
+    } catch (error) {
+      downloadersLogger.error({ error }, "Failed to get SABnzbd free space");
+      return 0;
+    }
+  }
+}
+
+// ==================== NZBGet Client ====================
+
+interface NZBGetListResult {
+  NZBID: number;
+  NZBName: string;
+  Status: string;
+  FileSizeMB: number;
+  RemainingSizeMB: number;
+  DownloadedSizeMB: number;
+  Category: string;
+  DownloadRate: number;
+  PostInfoText: string;
+  PostStageProgress: number;
+  PostStageTimeSec: number;
+}
+
+interface NZBGetHistoryResult {
+  NZBID: number;
+  Name: string;
+  Status: string;
+  FileSizeMB: number;
+  Category: string;
+  DownloadTimeSec: number;
+  ParStatus: string; // "SUCCESS", "FAILURE", "REPAIR_POSSIBLE", "MANUAL", "NONE"
+  UnpackStatus: string; // "SUCCESS", "FAILURE", "NONE"
+  FailedArticles: number;
+  DeleteStatus: string;
+  DestDir: string;
+}
+
+class NZBGetClient implements DownloaderClient {
+  private downloader: Downloader;
+
+  constructor(downloader: Downloader) {
+    this.downloader = downloader;
+  }
+
+  private getBaseUrl(): string {
+    let baseUrl = this.downloader.url;
+    if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+      const protocol = this.downloader.useSsl ? "https://" : "http://";
+      baseUrl = protocol + baseUrl;
+    }
+
+    try {
+      const urlObj = new URL(baseUrl);
+      if (this.downloader.port) {
+        urlObj.port = this.downloader.port.toString();
+      }
+      return urlObj.toString().replace(/\/$/, "");
+    } catch {
+      return baseUrl.replace(/\/$/, "");
+    }
+  }
+
+  private escapeXml(str: string): string {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  private buildXMLValue(param: unknown): string {
+    if (typeof param === "boolean") {
+      return `<boolean>${param ? 1 : 0}</boolean>`;
+    } else if (typeof param === "number") {
+      if (Number.isInteger(param)) {
+        return `<int>${param}</int>`;
+      }
+      return `<double>${param}</double>`;
+    } else if (typeof param === "string") {
+      return `<string>${this.escapeXml(param)}</string>`;
+    } else if (Array.isArray(param)) {
+      const data = param.map((p) => `<value>${this.buildXMLValue(p)}</value>`).join("");
+      return `<array><data>${data}</data></array>`;
+    } else if (typeof param === "object" && param !== null) {
+      const members = Object.entries(param)
+        .map(
+          ([k, v]) =>
+            `<member><name>${this.escapeXml(k)}</name><value>${this.buildXMLValue(v)}</value></member>`
+        )
+        .join("");
+      return `<struct>${members}</struct>`;
+    }
+    return "";
+  }
+
+  private parseValueObj(valueObj: any): any {
+    if (typeof valueObj !== "object" || valueObj === null) {
+      return valueObj;
+    }
+
+    // With parseTagValue: false and textNodeName: "_text", values might be wrapped
+    const getValue = (v: any) => (v && typeof v === "object" && "_text" in v ? v._text : v);
+
+    if ("string" in valueObj) return getValue(valueObj.string);
+    if ("int" in valueObj) return parseInt(getValue(valueObj.int));
+    if ("i4" in valueObj) return parseInt(getValue(valueObj.i4));
+    if ("boolean" in valueObj) {
+      const boolVal = getValue(valueObj.boolean);
+      return boolVal == 1 || boolVal === "1";
+    }
+    if ("double" in valueObj) return parseFloat(getValue(valueObj.double));
+    if ("base64" in valueObj) return getValue(valueObj.base64);
+
+    if ("array" in valueObj) {
+      // <array><data><value>...</value></data></array>
+      // With isArray: true for 'data', valueObj.array.data is an array of data blocks?
+      // XML-RPC spec: <array><data><value>...</value></data></array>
+      // fast-xml-parser with isArray('data') -> valueObj.array.data will be [{ value: [...] }]
+
+      const data = valueObj.array.data;
+      if (!data) return [];
+
+      // data might be an array if there are multiple <data> tags (unlikely in XML-RPC) or because of isArray config
+      const dataBlock = Array.isArray(data) ? data[0] : data;
+
+      if (!dataBlock || !dataBlock.value) return [];
+
+      const values = Array.isArray(dataBlock.value) ? dataBlock.value : [dataBlock.value];
+      return values.map((v: any) => this.parseValueObj(v));
+    }
+
+    if ("struct" in valueObj) {
+      // <struct><member><name>...</name><value>...</value></member></struct>
+      // With isArray('member') -> valueObj.struct.member is array
+      const members = valueObj.struct.member;
+      if (!members) return {};
+
+      const result: any = {};
+      // members is definitely array due to isArray config
+      for (const m of members) {
+        if (m.name && m.value) {
+          result[getValue(m.name)] = this.parseValueObj(m.value);
+        }
+      }
+      return result;
+    }
+
+    // Handle direct value text if none of the above matched (e.g. <value>string</value> without <string> tag?)
+    // XML-RPC spec says <value> without type is string.
+    if ("_text" in valueObj) return valueObj._text;
+
+    // Fallback
+    return String(Object.values(valueObj)[0]);
+  }
+
+  private async makeXMLRPCRequest(method: string, params: unknown[] = []): Promise<any> {
+    const baseUrl = this.getBaseUrl();
+    // Use configured path or default to xmlrpc for NZBGet
+    const path = this.downloader.urlPath || "xmlrpc";
+    const url = `${baseUrl}/${path.replace(/^\//, "")}`;
+
+    const xmlParams = params
+      .map((param) => `<param><value>${this.buildXMLValue(param)}</value></param>`)
+      .join("");
+
+    const xmlBody = `<?xml version="1.0"?>
+<methodCall>
+  <methodName>${this.escapeXml(method)}</methodName>
+  <params>
+    ${xmlParams}
+  </params>
+</methodCall>`;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "text/xml",
+      "User-Agent": "Questarr/1.0",
+    };
+
+    if (this.downloader.username && this.downloader.password) {
+      const auth = Buffer.from(
+        `${this.downloader.username}:${this.downloader.password}`,
+        "latin1"
+      ).toString("base64");
+      headers["Authorization"] = `Basic ${auth}`;
+    }
+
+    // Mask sensitive content in logs
+    const logParams =
+      method === "append" && params.length > 1
+        ? [params[0], "<base64_content_truncated>", ...params.slice(2)]
+        : params;
+
+    downloadersLogger.debug({ url, method, params: logParams }, "Making NZBGet XML-RPC request");
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: xmlBody,
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "No error details");
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const responseText = await response.text();
+
+    // Log response for debugging
+    // downloadersLogger.debug({ responseText }, "NZBGet XML-RPC response");
+
+    const parser = new XMLParser({
+      ignoreAttributes: true,
+      parseTagValue: false,
+      textNodeName: "_text",
+      isArray: (name, jpath) => {
+        // Always treat these as arrays to simplify parsing
+        if (name === "data") return true; // <data><value>...</value></data>
+        if (name === "member") return true; // <struct><member>...</member></struct>
+        if (name === "param") return true; // <params><param>...</param></params>
+        return false;
+      },
+    });
+
+    const parsed = parser.parse(responseText);
+    // downloadersLogger.debug({ parsed }, "NZBGet parsed response");
+
+    if (parsed.methodResponse?.fault) {
+      const fault = this.parseValueObj(parsed.methodResponse.fault.value);
+      throw new Error(`NZBGet Fault: ${fault.faultString} (${fault.faultCode})`);
+    }
+
+    if (parsed.methodResponse?.params?.param) {
+      // params can be an array of param, but we usually expect one return value in XML-RPC response?
+      // Actually XML-RPC spec says <params> contains ONE <param> for the return value.
+      const params = parsed.methodResponse.params.param;
+      const param = Array.isArray(params) ? params[0] : params;
+
+      if (param && param.value) {
+        return this.parseValueObj(param.value);
+      }
+    }
+
+    return null;
+  }
+
+  async testConnection(): Promise<{ success: boolean; message: string }> {
+    try {
+      const version = await this.makeXMLRPCRequest("version");
+      return { success: true, message: `Connected to NZBGet v${version}` };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const baseUrl = this.getBaseUrl();
+      downloadersLogger.error({ error, url: baseUrl }, "NZBGet connection test failed");
+      return {
+        success: false,
+        message: `Failed to connect to NZBGet at ${baseUrl}: ${errorMessage}`,
+      };
+    }
+  }
+
+  async addTorrent(
+    request: DownloadRequest
+  ): Promise<{ success: boolean; id?: string; message: string }> {
+    try {
+      // Fetch the NZB file
+      const nzbResponse = await fetch(request.url);
+      if (!nzbResponse.ok) {
+        return { success: false, message: `Failed to fetch NZB: ${nzbResponse.statusText}` };
+      }
+
+      const nzbContent = await nzbResponse.text();
+      const base64Content = Buffer.from(nzbContent).toString("base64");
+
+      // NZBGet append method arguments (XML-RPC):
+      // 1. NZBFilename (string)
+      // 2. Content (string, base64 encoded)
+      // 3. Category (string)
+      // 4. Priority (int)
+      // 5. AddToTop (bool)
+      // 6. AddPaused (bool)
+      // 7. DupeKey (string)
+      // 8. DupeScore (int)
+      // 9. DupeMode (string)
+      // 10. PPParameters (array of structs)
+
+      const nzbId = await this.makeXMLRPCRequest("append", [
+        request.title || "download.nzb",
+        base64Content,
+        request.category || "",
+        request.priority || 0,
+        false, // AddToTop
+        false, // AddPaused
+        "", // DupeKey
+        0, // DupeScore
+        "SCORE", // DupeMode
+        [], // PPParameters
+      ]);
+
+      if (nzbId > 0) {
+        return {
+          success: true,
+          id: nzbId.toString(),
+          message: "NZB added successfully",
+        };
+      }
+
+      return { success: false, message: "Failed to add NZB (ID is 0 or negative)" };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async getTorrentStatus(id: string): Promise<DownloadStatus | null> {
+    try {
+      const queue = (await this.makeXMLRPCRequest("listgroups")) as NZBGetListResult[];
+      const item = queue.find((q) => q.NZBID.toString() === id);
+
+      if (!item) {
+        // Check history
+        return await this.getFromHistory(id);
+      }
+
+      const progress =
+        item.FileSizeMB > 0
+          ? ((item.FileSizeMB - item.RemainingSizeMB) / item.FileSizeMB) * 100
+          : 0;
+
+      // Calculate ETA
+      let eta: number | undefined;
+      if (item.DownloadRate > 0 && item.RemainingSizeMB > 0) {
+        eta = (item.RemainingSizeMB * 1024 * 1024) / item.DownloadRate;
+      }
+
+      // Map NZBGet status
+      let status: DownloadStatus["status"];
+      let repairStatus: DownloadStatus["repairStatus"];
+      let unpackStatus: DownloadStatus["unpackStatus"];
+
+      switch (item.Status) {
+        case "DOWNLOADING":
+        case "FETCHING":
+          status = "downloading";
+          break;
+        case "PAUSED":
+          status = "paused";
+          break;
+        case "POST_PROCESSING":
+          if (item.PostInfoText.includes("Repairing")) {
+            status = "repairing";
+            repairStatus = "repairing";
+          } else if (
+            item.PostInfoText.includes("Unpacking") ||
+            item.PostInfoText.includes("Extracting")
+          ) {
+            status = "unpacking";
+            unpackStatus = "unpacking";
+          } else {
+            status = "downloading";
+          }
+          break;
+        default:
+          status = "downloading";
+      }
+
+      return {
+        id: item.NZBID.toString(),
+        name: item.NZBName,
+        downloadType: "usenet",
+        status,
+        progress,
+        downloadSpeed: item.DownloadRate,
+        eta,
+        size: item.FileSizeMB * 1024 * 1024,
+        downloaded: item.DownloadedSizeMB * 1024 * 1024,
+        category: item.Category,
+        repairStatus,
+        unpackStatus,
+      };
+    } catch (error) {
+      downloadersLogger.error({ error }, "Failed to get NZBGet status");
+      return null;
+    }
+  }
+
+  private async getFromHistory(id: string): Promise<DownloadStatus | null> {
+    try {
+      const history = (await this.makeXMLRPCRequest("history")) as NZBGetHistoryResult[];
+      const item = history.find((h) => h.NZBID.toString() === id);
+
+      if (!item) {
+        return null;
+      }
+
+      let status: DownloadStatus["status"];
+      let repairStatus: DownloadStatus["repairStatus"];
+      let unpackStatus: DownloadStatus["unpackStatus"];
+
+      if (item.Status === "SUCCESS/ALL") {
+        status = "completed";
+        repairStatus =
+          item.ParStatus === "SUCCESS" || item.ParStatus === "NONE" ? "good" : "failed";
+        unpackStatus =
+          item.UnpackStatus === "SUCCESS" || item.UnpackStatus === "NONE" ? "completed" : "failed";
+      } else {
+        status = "error";
+        repairStatus = item.ParStatus === "FAILURE" ? "failed" : "good";
+        unpackStatus = item.UnpackStatus === "FAILURE" ? "failed" : "completed";
+      }
+
+      return {
+        id: item.NZBID.toString(),
+        name: item.Name,
+        downloadType: "usenet",
+        status,
+        progress: status === "completed" ? 100 : 0,
+        size: item.FileSizeMB * 1024 * 1024,
+        downloaded: item.FileSizeMB * 1024 * 1024,
+        category: item.Category,
+        repairStatus,
+        unpackStatus,
+      };
+    } catch (error) {
+      downloadersLogger.error({ error }, "Failed to get NZBGet history");
+      return null;
+    }
+  }
+
+  async getTorrentDetails(id: string): Promise<TorrentDetails | null> {
+    const status = await this.getTorrentStatus(id);
+    if (!status) return null;
+
+    // NZBGet doesn't provide detailed file information easily
+    return {
+      ...status,
+      files: [],
+      trackers: [],
+    };
+  }
+
+  async getAllTorrents(): Promise<DownloadStatus[]> {
+    try {
+      const queue = (await this.makeXMLRPCRequest("listgroups")) as NZBGetListResult[];
+      const results: DownloadStatus[] = [];
+
+      for (const item of queue) {
+        const status = await this.getTorrentStatus(item.NZBID.toString());
+        if (status) {
+          results.push(status);
+        }
+      }
+
+      return results;
+    } catch (error) {
+      downloadersLogger.error({ error }, "Failed to get NZBGet queue");
+      return [];
+    }
+  }
+
+  async pauseTorrent(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await this.makeXMLRPCRequest("editqueue", ["GroupPause", 0, "", [parseInt(id)]]);
+      return { success: true, message: "NZB paused" };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async resumeTorrent(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await this.makeXMLRPCRequest("editqueue", ["GroupResume", 0, "", [parseInt(id)]]);
+      return { success: true, message: "NZB resumed" };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async removeTorrent(
+    id: string,
+    _deleteFiles?: boolean
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      await this.makeXMLRPCRequest("editqueue", ["GroupDelete", 0, "", [parseInt(id)]]);
+      return { success: true, message: "NZB removed" };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async getFreeSpace(): Promise<number> {
+    try {
+      const status = (await this.makeXMLRPCRequest("status")) as { FreeDiskSpaceMB: number };
+      return status.FreeDiskSpaceMB * 1024 * 1024; // Convert MB to bytes
+    } catch (error) {
+      downloadersLogger.error({ error }, "Failed to get NZBGet free space");
+      return 0;
+    }
   }
 }
 

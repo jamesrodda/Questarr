@@ -8,8 +8,8 @@ import {
   type InsertIndexer,
   type Downloader,
   type InsertDownloader,
-  type GameTorrent,
-  type InsertGameTorrent,
+  type GameDownload,
+  type InsertGameDownload,
   type Notification,
   type InsertNotification,
   type UserSettings,
@@ -20,7 +20,7 @@ import {
   indexers,
   downloaders,
   notifications,
-  gameTorrents,
+  gameDownloads,
   userSettings,
   systemConfig,
 } from "../shared/schema.js";
@@ -71,10 +71,10 @@ export interface IStorage {
   updateDownloader(id: string, updates: Partial<InsertDownloader>): Promise<Downloader | undefined>;
   removeDownloader(id: string): Promise<boolean>;
 
-  // GameTorrent methods
-  getDownloadingGameTorrents(): Promise<GameTorrent[]>;
-  updateGameTorrentStatus(id: string, status: string): Promise<void>;
-  addGameTorrent(gameTorrent: InsertGameTorrent): Promise<GameTorrent>;
+  // GameDownload methods
+  getDownloadingGameDownloads(): Promise<GameDownload[]>;
+  updateGameDownloadStatus(id: string, status: string): Promise<void>;
+  addGameDownload(gameDownload: InsertGameDownload): Promise<GameDownload>;
 
   // Notification methods
   getNotifications(limit?: number): Promise<Notification[]>;
@@ -99,7 +99,7 @@ export class MemStorage implements IStorage {
   private indexers: Map<string, Indexer>;
   private downloaders: Map<string, Downloader>;
   private notifications: Map<string, Notification>;
-  private gameTorrents: Map<string, GameTorrent>;
+  private gameDownloads: Map<string, GameDownload>;
   private userSettings: Map<string, UserSettings>;
   private systemConfig: Map<string, string>;
 
@@ -109,7 +109,7 @@ export class MemStorage implements IStorage {
     this.indexers = new Map();
     this.downloaders = new Map();
     this.notifications = new Map();
-    this.gameTorrents = new Map();
+    this.gameDownloads = new Map();
     this.userSettings = new Map();
     this.systemConfig = new Map();
   }
@@ -314,6 +314,7 @@ export class MemStorage implements IStorage {
       name: insertIndexer.name,
       url: insertIndexer.url,
       apiKey: insertIndexer.apiKey,
+      protocol: insertIndexer.protocol ?? "torznab",
       enabled: insertIndexer.enabled ?? true,
       priority: insertIndexer.priority ?? 1,
       categories: insertIndexer.categories ?? [],
@@ -408,30 +409,31 @@ export class MemStorage implements IStorage {
     return this.downloaders.delete(id);
   }
 
-  // GameTorrent methods
-  async getDownloadingGameTorrents(): Promise<GameTorrent[]> {
-    return Array.from(this.gameTorrents.values()).filter((gt) => gt.status === "downloading");
+  // GameDownload methods
+  async getDownloadingGameDownloads(): Promise<GameDownload[]> {
+    return Array.from(this.gameDownloads.values()).filter((gd) => gd.status === "downloading");
   }
 
-  async updateGameTorrentStatus(id: string, status: string): Promise<void> {
-    const gt = this.gameTorrents.get(id);
-    if (gt) {
+  async updateGameDownloadStatus(id: string, status: string): Promise<void> {
+    const gd = this.gameDownloads.get(id);
+    if (gd) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.gameTorrents.set(id, { ...gt, status: status as any });
+      this.gameDownloads.set(id, { ...gd, status: status as any });
     }
   }
 
-  async addGameTorrent(insertGameTorrent: InsertGameTorrent): Promise<GameTorrent> {
+  async addGameDownload(insertGameDownload: InsertGameDownload): Promise<GameDownload> {
     const id = randomUUID();
-    const gameTorrent: GameTorrent = {
-      ...insertGameTorrent,
+    const gameDownload: GameDownload = {
+      ...insertGameDownload,
       id,
-      status: insertGameTorrent.status || "downloading",
+      status: insertGameDownload.status || "downloading",
+      downloadType: insertGameDownload.downloadType || "torrent",
       addedAt: new Date(),
       completedAt: null,
     };
-    this.gameTorrents.set(id, gameTorrent);
-    return gameTorrent;
+    this.gameDownloads.set(id, gameDownload);
+    return gameDownload;
   }
 
   // Notification methods
@@ -794,32 +796,32 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  // GameTorrent methods
-  async getDownloadingGameTorrents(): Promise<GameTorrent[]> {
+  // GameDownload methods
+  async getDownloadingGameDownloads(): Promise<GameDownload[]> {
     // Return all active downloads (not completed) so we can sync their status
     return db
       .select()
-      .from(gameTorrents)
+      .from(gameDownloads)
       .where(
         or(
-          eq(gameTorrents.status, "downloading"),
-          eq(gameTorrents.status, "paused"),
-          eq(gameTorrents.status, "failed")
+          eq(gameDownloads.status, "downloading"),
+          eq(gameDownloads.status, "paused"),
+          eq(gameDownloads.status, "failed")
         ) as SQL
       );
   }
 
-  async updateGameTorrentStatus(id: string, status: string): Promise<void> {
+  async updateGameDownloadStatus(id: string, status: string): Promise<void> {
     await db
-      .update(gameTorrents)
+      .update(gameDownloads)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .set({ status: status as any, completedAt: status === "completed" ? new Date() : null })
-      .where(eq(gameTorrents.id, id));
+      .where(eq(gameDownloads.id, id));
   }
 
-  async addGameTorrent(insertGameTorrent: InsertGameTorrent): Promise<GameTorrent> {
-    const [gameTorrent] = await db.insert(gameTorrents).values(insertGameTorrent).returning();
-    return gameTorrent;
+  async addGameDownload(insertGameDownload: InsertGameDownload): Promise<GameDownload> {
+    const [gameDownload] = await db.insert(gameDownloads).values(insertGameDownload).returning();
+    return gameDownload;
   }
 
   // Notification methods

@@ -23,7 +23,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -32,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Download, Loader2, FileDown, PackagePlus, SlidersHorizontal } from "lucide-react";
+import { Download, Loader2, PackagePlus, SlidersHorizontal, Newspaper } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Game } from "@shared/schema";
 import { groupTorrentsByCategory, type TorrentCategory } from "@/lib/torrent-categorizer";
@@ -50,6 +49,11 @@ interface TorrentItem {
   uploadVolumeFactor?: number;
   guid?: string;
   comments?: string;
+  // Usenet-specific fields
+  grabs?: number;
+  age?: number;
+  poster?: string;
+  group?: string;
 }
 
 interface SearchResult {
@@ -65,14 +69,6 @@ interface GameDownloadDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
-
 function formatDate(dateString: string): string {
   try {
     return new Date(dateString).toLocaleDateString();
@@ -82,6 +78,7 @@ function formatDate(dateString: string): string {
 }
 
 import { apiRequest } from "@/lib/queryClient";
+import { formatBytes, formatAge, isUsenetItem } from "@/lib/downloads-utils";
 
 export default function GameDownloadDialog({ game, open, onOpenChange }: GameDownloadDialogProps) {
   const { toast } = useToast();
@@ -179,6 +176,7 @@ export default function GameDownloadDialog({ game, open, onOpenChange }: GameDow
           url: torrent.link,
           title: torrent.title,
           gameId: game?.id,
+          downloadType: isUsenetItem(torrent) ? "usenet" : "torrent",
         });
         results.push(await response.json());
       }
@@ -257,7 +255,7 @@ export default function GameDownloadDialog({ game, open, onOpenChange }: GameDow
     document.body.removeChild(link);
   };
 
-  const handleDirectDownload = (torrent: TorrentItem) => {
+  const _handleDirectDownload = (torrent: TorrentItem) => {
     // Check if this is a main game torrent and we have updates available
     if (categorizedTorrents.update.length > 0) {
       const torrentCategory = groupTorrentsByCategory([torrent]);
@@ -551,30 +549,99 @@ export default function GameDownloadDialog({ game, open, onOpenChange }: GameDow
                           <div>Release Name</div>
                           <div className="w-[80px] text-right">Actions</div>
                         </div>
-                        {sortedCategoryTorrents.map((torrent: TorrentItem) => (
-                          <div
-                            key={torrent.guid || torrent.link}
-                            className="p-2 text-sm flex justify-between items-center hover:bg-muted/30 transition-colors gap-4"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate" title={torrent.title}>
-                                {torrent.title}
+                        {sortedCategoryTorrents.map((torrent: TorrentItem) => {
+                          const isUsenet = isUsenetItem(torrent);
+                          return (
+                            <div
+                              key={torrent.guid || torrent.link}
+                              className="p-2 text-sm hover:bg-muted/30 transition-colors"
+                            >
+                              <div className="flex justify-between items-start gap-4 mb-2">
+                                <div className="flex-1 min-w-0 flex items-center gap-2">
+                                  <div
+                                    className="font-medium flex-1 break-words overflow-hidden text-ellipsis"
+                                    title={torrent.title}
+                                  >
+                                    {torrent.title}
+                                  </div>
+                                  <Badge
+                                    variant={isUsenet ? "secondary" : "default"}
+                                    className="text-xs flex-shrink-0"
+                                  >
+                                    {isUsenet ? (
+                                      <>
+                                        <Newspaper className="h-3 w-3 mr-1" />
+                                        NZB
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Download className="h-3 w-3 mr-1" />
+                                        TORRENT
+                                      </>
+                                    )}
+                                  </Badge>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleDownload(torrent)}
+                                  disabled={downloadingGuid === (torrent.guid || torrent.link)}
+                                  className="h-7 flex-shrink-0"
+                                >
+                                  {downloadingGuid === (torrent.guid || torrent.link) ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      Downloading...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Download
+                                        className="h-3 w-3 mr-1"
+                                        data-testid="icon-download-action"
+                                      />
+                                      Download
+                                    </>
+                                  )}
+                                </Button>
                               </div>
-                              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                                 <span>{formatDate(torrent.pubDate)}</span>
                                 <span>•</span>
                                 <span>{torrent.size ? formatBytes(torrent.size) : "-"}</span>
                                 <span>•</span>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-green-600 font-medium">
-                                    {torrent.seeders ?? 0}
-                                  </span>
-                                  <span>/</span>
-                                  <span className="text-red-600 font-medium">
-                                    {torrent.leechers ?? 0}
-                                  </span>
-                                  <span>peers</span>
-                                </div>
+                                {isUsenet ? (
+                                  <div className="flex items-center gap-2">
+                                    {torrent.grabs !== undefined && (
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-blue-600 font-medium">
+                                          {torrent.grabs}
+                                        </span>
+                                        <span>grabs</span>
+                                      </div>
+                                    )}
+                                    {torrent.grabs !== undefined && torrent.age !== undefined && (
+                                      <span>•</span>
+                                    )}
+                                    {torrent.age !== undefined && (
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-purple-600 font-medium">
+                                          {formatAge(torrent.age)}
+                                        </span>
+                                        <span>old</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-green-600 font-medium">
+                                      {torrent.seeders ?? 0}
+                                    </span>
+                                    <span>/</span>
+                                    <span className="text-red-600 font-medium">
+                                      {torrent.leechers ?? 0}
+                                    </span>
+                                    <span>peers</span>
+                                  </div>
+                                )}
                                 {torrent.description && (
                                   <>
                                     <span>•</span>
@@ -588,41 +655,8 @@ export default function GameDownloadDialog({ game, open, onOpenChange }: GameDow
                                 )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleDirectDownload(torrent)}
-                                    className="h-8 w-8"
-                                  >
-                                    <FileDown className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Download .torrent file</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleDownload(torrent)}
-                                    disabled={downloadingGuid !== null}
-                                    className="h-8 w-8"
-                                  >
-                                    {downloadingGuid === (torrent.guid || torrent.link) ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Download className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Add to downloader</TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );

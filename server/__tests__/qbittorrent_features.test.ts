@@ -84,7 +84,9 @@ describe("QBittorrentClient - Advanced Features", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8080/api/v2/torrents/add",
       expect.objectContaining({
-        body: expect.stringContaining("urls=http%3A%2F%2Ftracker.example.com%2Fdownload%2F123.torrent"),
+        body: expect.stringContaining(
+          "urls=http%3A%2F%2Ftracker.example.com%2Fdownload%2F123.torrent"
+        ),
       })
     );
 

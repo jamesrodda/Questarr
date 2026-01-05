@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Downloader } from "@shared/schema";
 
@@ -41,27 +40,34 @@ describe("TransmissionClient Feature Verification", () => {
 
   it("should handle magnet links by passing them directly", async () => {
     const { DownloaderManager } = await import("../downloaders.js");
-    
+
     // Mock successful RPC response
     const rpcResponse = {
       ok: true,
       status: 200,
       json: async () => ({
         result: "success",
-        arguments: { "torrent-added": { id: 1, name: "test" } }
-      })
+        arguments: {
+          "torrent-added": {
+            id: 1,
+            name: "test",
+            hashString: "1234567890123456789012345678901234567890",
+          },
+        },
+      }),
     };
     fetchMock.mockResolvedValue(rpcResponse);
 
+    const magnetUrl = "magnet:?xt=urn:btih:1234567890123456789012345678901234567890";
     await DownloaderManager.addTorrent(testDownloader, {
-      url: "magnet:?xt=urn:btih:123",
-      title: "Magnet Game"
+      url: magnetUrl,
+      title: "Magnet Game",
     });
 
     // Should call RPC with filename = magnet link
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const callBody = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(callBody.arguments.filename).toBe("magnet:?xt=urn:btih:123");
+    expect(callBody.arguments.filename).toBe(magnetUrl);
   });
 
   it("should handle categories by setting labels and download-dir", async () => {
@@ -72,16 +78,22 @@ describe("TransmissionClient Feature Verification", () => {
       status: 200,
       json: async () => ({
         result: "success",
-        arguments: { "torrent-added": { id: 1, name: "test" } }
-      })
+        arguments: {
+          "torrent-added": {
+            id: 1,
+            name: "test",
+            hashString: "1234567890123456789012345678901234567890",
+          },
+        },
+      }),
     };
     fetchMock.mockResolvedValue(rpcResponse);
 
     await DownloaderManager.addTorrent(testDownloader, {
-      url: "magnet:?xt=urn:btih:123",
+      url: "magnet:?xt=urn:btih:1234567890123456789012345678901234567890",
       title: "Category Game",
       category: "rpg",
-      downloadPath: "/games"
+      downloadPath: "/games",
     });
 
     const callBody = JSON.parse(fetchMock.mock.calls[0][1].body);
@@ -98,7 +110,7 @@ describe("TransmissionClient Feature Verification", () => {
       status: 200,
       arrayBuffer: async () => new ArrayBuffer(10), // Mock content
       text: async () => "mock torrent content",
-      headers: new Headers()
+      headers: new Headers(),
     };
 
     // Mock 2: RPC response
@@ -107,18 +119,22 @@ describe("TransmissionClient Feature Verification", () => {
       status: 200,
       json: async () => ({
         result: "success",
-        arguments: { "torrent-added": { id: 1, name: "test" } }
-      })
+        arguments: {
+          "torrent-added": {
+            id: 1,
+            name: "test",
+            hashString: "1234567890123456789012345678901234567890",
+          },
+        },
+      }),
     };
 
-    fetchMock
-      .mockResolvedValueOnce(torrentFileResponse)
-      .mockResolvedValueOnce(rpcResponse);
+    fetchMock.mockResolvedValueOnce(torrentFileResponse).mockResolvedValueOnce(rpcResponse);
 
     const torrentUrl = "http://indexer.com/download/123.torrent";
     await DownloaderManager.addTorrent(testDownloader, {
       url: torrentUrl,
-      title: "Torrent File Game"
+      title: "Torrent File Game",
     });
 
     // Check if fetch was called for the .torrent file

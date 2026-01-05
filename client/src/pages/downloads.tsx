@@ -12,9 +12,26 @@ import {
   shouldShowRatioBadge,
   shouldShowSizeBadge,
   shouldShowPeersBadge,
+  shouldShowTorrentMetrics,
+  shouldShowUsenetMetrics,
+  shouldShowRepairStatus,
+  shouldShowUnpackStatus,
+  formatRepairStatus,
+  formatUnpackStatus,
+  formatAge,
   type DownloadStatusType,
+  type DownloadType,
 } from "@/lib/downloads-utils";
-import { Play, Pause, Trash2, MoreHorizontal, RefreshCw, Info } from "lucide-react";
+import {
+  Play,
+  Pause,
+  Trash2,
+  MoreHorizontal,
+  RefreshCw,
+  Info,
+  Download,
+  Newspaper,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +62,12 @@ interface DownloadStatus {
   error?: string;
   downloaderId: string;
   downloaderName: string;
+  // Download type and Usenet-specific fields
+  downloadType?: DownloadType;
+  repairStatus?: "good" | "repairing" | "failed";
+  unpackStatus?: "unpacking" | "completed" | "failed";
+  age?: number;
+  grabs?: number;
 }
 
 interface DownloaderError {
@@ -64,6 +87,7 @@ export default function Downloads() {
   const [selectedTorrent, setSelectedTorrent] = useState<DownloadStatus | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<DownloadStatusType | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<DownloadType | "all">("all");
 
   const {
     data: downloadsData,
@@ -74,13 +98,19 @@ export default function Downloads() {
     refetchInterval: 5000, // Refresh every 5 seconds
   });
 
-  const downloads = downloadsData?.torrents || [];
+  const downloads = useMemo(() => downloadsData?.torrents || [], [downloadsData?.torrents]);
 
   // Memoize errors to avoid recreating array on every render
   const errors = useMemo(() => downloadsData?.errors || [], [downloadsData?.errors]);
 
-  // Filter downloads based on selected status using utility function
-  const filteredDownloads = filterDownloadsByStatus(downloads, statusFilter);
+  // Filter downloads based on selected status and type
+  const filteredDownloads = useMemo(() => {
+    let filtered = filterDownloadsByStatus(downloads, statusFilter);
+    if (typeFilter !== "all") {
+      filtered = filtered.filter((d) => (d.downloadType || "torrent") === typeFilter);
+    }
+    return filtered;
+  }, [downloads, statusFilter, typeFilter]);
 
   // Show toast notifications for downloader errors
   // Only show each error once per session to avoid spam
@@ -278,33 +308,56 @@ export default function Downloads() {
       </div>
 
       {/* Status filter tabs */}
-      <Tabs
-        value={statusFilter}
-        onValueChange={(value) => setStatusFilter(value as DownloadStatusType | "all")}
-        className="mb-6"
-        aria-label="Filter downloads by status"
-      >
-        <TabsList data-testid="filter-tabs">
-          <TabsTrigger value="all" data-testid="filter-all">
-            All
-          </TabsTrigger>
-          <TabsTrigger value="downloading" data-testid="filter-downloading">
-            Downloading
-          </TabsTrigger>
-          <TabsTrigger value="seeding" data-testid="filter-seeding">
-            Seeding
-          </TabsTrigger>
-          <TabsTrigger value="completed" data-testid="filter-completed">
-            Completed
-          </TabsTrigger>
-          <TabsTrigger value="paused" data-testid="filter-paused">
-            Paused
-          </TabsTrigger>
-          <TabsTrigger value="error" data-testid="filter-error">
-            Error
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-sm font-medium text-muted-foreground">Status:</span>
+          <Tabs
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as DownloadStatusType | "all")}
+            aria-label="Filter downloads by status"
+          >
+            <TabsList data-testid="filter-tabs">
+              <TabsTrigger value="all" data-testid="filter-all">
+                All
+              </TabsTrigger>
+              <TabsTrigger value="downloading" data-testid="filter-downloading">
+                Downloading
+              </TabsTrigger>
+              <TabsTrigger value="seeding" data-testid="filter-seeding">
+                Seeding
+              </TabsTrigger>
+              <TabsTrigger value="completed" data-testid="filter-completed">
+                Completed
+              </TabsTrigger>
+              <TabsTrigger value="paused" data-testid="filter-paused">
+                Paused
+              </TabsTrigger>
+              <TabsTrigger value="error" data-testid="filter-error">
+                Error
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-sm font-medium text-muted-foreground">Protocol:</span>
+          <Tabs
+            value={typeFilter}
+            onValueChange={(value) => setTypeFilter(value as DownloadType | "all")}
+            aria-label="Filter downloads by protocol"
+          >
+            <TabsList>
+              <TabsTrigger value="all">All Protocols</TabsTrigger>
+              <TabsTrigger value="torrent" className="flex items-center gap-2">
+                <Download className="h-3 w-3" /> Torrents
+              </TabsTrigger>
+              <TabsTrigger value="usenet" className="flex items-center gap-2">
+                <Newspaper className="h-3 w-3" /> Usenet
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </div>
 
       <div className="grid gap-4">
         {filteredDownloads.length > 0 ? (
@@ -335,6 +388,24 @@ export default function Downloads() {
                         >
                           {download.downloaderName}
                         </Badge>
+                        {/* Download Type Badge */}
+                        <Badge
+                          variant={download.downloadType === "usenet" ? "secondary" : "default"}
+                          className="text-xs"
+                          data-testid={`badge-type-${download.id}`}
+                        >
+                          {download.downloadType === "usenet" ? (
+                            <>
+                              <Newspaper className="h-3 w-3 mr-1" />
+                              USENET
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3 w-3 mr-1" />
+                              TORRENT
+                            </>
+                          )}
+                        </Badge>
                         {shouldShowSizeBadge(download.size) && (
                           <Badge
                             variant="outline"
@@ -342,6 +413,26 @@ export default function Downloads() {
                             aria-label={`Downloaded ${formatBytes(download.downloaded || 0)} of ${formatBytes(download.size!)}`}
                           >
                             {formatBytes(download.downloaded || 0)} / {formatBytes(download.size!)}
+                          </Badge>
+                        )}
+                        {/* Usenet-specific: Repair Status */}
+                        {shouldShowRepairStatus(download) && (
+                          <Badge
+                            variant="outline"
+                            data-testid={`badge-repair-${download.id}`}
+                            aria-label={`Repair: ${formatRepairStatus(download.repairStatus!)}`}
+                          >
+                            Repair: {formatRepairStatus(download.repairStatus!)}
+                          </Badge>
+                        )}
+                        {/* Usenet-specific: Unpack Status */}
+                        {shouldShowUnpackStatus(download) && (
+                          <Badge
+                            variant="outline"
+                            data-testid={`badge-unpack-${download.id}`}
+                            aria-label={`Unpack: ${formatUnpackStatus(download.unpackStatus!)}`}
+                          >
+                            Unpack: {formatUnpackStatus(download.unpackStatus!)}
                           </Badge>
                         )}
                         {shouldShowSpeedBadge(download.downloadSpeed) && (
@@ -353,15 +444,16 @@ export default function Downloads() {
                             ↓ {formatSpeed(download.downloadSpeed!)}
                           </Badge>
                         )}
-                        {shouldShowSpeedBadge(download.uploadSpeed) && (
-                          <Badge
-                            variant="outline"
-                            data-testid={`badge-upload-speed-${download.id}`}
-                            aria-label={`Upload speed: ${formatSpeed(download.uploadSpeed!)}`}
-                          >
-                            ↑ {formatSpeed(download.uploadSpeed!)}
-                          </Badge>
-                        )}
+                        {shouldShowSpeedBadge(download.uploadSpeed) &&
+                          shouldShowTorrentMetrics(download) && (
+                            <Badge
+                              variant="outline"
+                              data-testid={`badge-upload-speed-${download.id}`}
+                              aria-label={`Upload speed: ${formatSpeed(download.uploadSpeed!)}`}
+                            >
+                              ↑ {formatSpeed(download.uploadSpeed!)}
+                            </Badge>
+                          )}
                         {shouldShowETABadge(download.eta) && (
                           <Badge
                             variant="outline"
@@ -371,24 +463,47 @@ export default function Downloads() {
                             ETA: {formatETA(download.eta!)}
                           </Badge>
                         )}
-                        {shouldShowPeersBadge(download.seeders) && (
+                        {/* Torrent-specific: Peers */}
+                        {shouldShowPeersBadge(download.seeders) &&
+                          shouldShowTorrentMetrics(download) && (
+                            <Badge
+                              variant="outline"
+                              data-testid={`badge-peers-${download.id}`}
+                              aria-label={`${download.seeders} seeders, ${download.leechers || 0} leechers`}
+                            >
+                              {download.seeders}↑ / {download.leechers || 0}↓
+                            </Badge>
+                          )}
+                        {/* Usenet-specific: Age */}
+                        {download.age !== undefined && shouldShowUsenetMetrics(download) && (
                           <Badge
                             variant="outline"
-                            data-testid={`badge-peers-${download.id}`}
-                            aria-label={`${download.seeders} seeders, ${download.leechers || 0} leechers`}
+                            data-testid={`badge-age-${download.id}`}
+                            aria-label={`Age: ${formatAge(download.age)}`}
                           >
-                            {download.seeders}↑ / {download.leechers || 0}↓
+                            Age: {formatAge(download.age)}
                           </Badge>
                         )}
-                        {shouldShowRatioBadge(download.ratio) && (
+                        {/* Usenet-specific: Grabs */}
+                        {download.grabs !== undefined && shouldShowUsenetMetrics(download) && (
                           <Badge
                             variant="outline"
-                            data-testid={`badge-ratio-${download.id}`}
-                            aria-label={`Share ratio: ${download.ratio?.toFixed(2) ?? "0.00"}`}
+                            data-testid={`badge-grabs-${download.id}`}
+                            aria-label={`${download.grabs} grabs`}
                           >
-                            Ratio: {download.ratio?.toFixed(2) ?? "0.00"}
+                            {download.grabs} grabs
                           </Badge>
                         )}
+                        {shouldShowRatioBadge(download.ratio) &&
+                          shouldShowTorrentMetrics(download) && (
+                            <Badge
+                              variant="outline"
+                              data-testid={`badge-ratio-${download.id}`}
+                              aria-label={`Share ratio: ${download.ratio?.toFixed(2) ?? "0.00"}`}
+                            >
+                              Ratio: {download.ratio?.toFixed(2) ?? "0.00"}
+                            </Badge>
+                          )}
                       </div>
                     </CardDescription>
                   </div>
