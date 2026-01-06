@@ -1,12 +1,7 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
-import { asZodType } from "@/lib/utils";
-import { Plus, Edit, Trash2, Check, X, Activity } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -17,14 +12,13 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -32,10 +26,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useForm } from "react-hook-form";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
+import { asZodType } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertDownloaderSchema, type Downloader, type InsertDownloader } from "@shared/schema";
-import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Activity, Check, Edit, Plus, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 
 const downloaderTypes = [
   { value: "transmission", label: "Transmission", protocol: "torrent" },
@@ -475,46 +475,33 @@ export default function DownloadersPage() {
                   name="url"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>
-                        {form.watch("type") === "rtorrent" ||
-                        form.watch("type") === "qbittorrent" ||
-                        form.watch("type") === "transmission"
-                          ? "Host"
-                          : "URL"}
-                      </FormLabel>
+                      <FormLabel>Host</FormLabel>
                       <FormControl>
                         <Input
                           placeholder={
-                            form.watch("type") === "rtorrent"
-                              ? "localhost or 192.168.1.100"
-                              : form.watch("type") === "qbittorrent"
-                                ? "localhost or 192.168.1.100"
-                                : form.watch("type") === "transmission"
-                                  ? "localhost or 192.168.1.100"
-                                  : form.watch("type") === "sabnzbd"
-                                    ? "http://localhost:8080"
-                                    : form.watch("type") === "nzbget"
-                                      ? "http://localhost:6789"
-                                      : "http://localhost:9091/transmission/rpc"
+                            form.watch("type") === "rtorrent" ||
+                            form.watch("type") === "qbittorrent" ||
+                            form.watch("type") === "transmission" ||
+                            form.watch("type") === "sabnzbd" ||
+                            form.watch("type") === "nzbget"
+                              ? "http://localhost or https://192.168.1.100"
+                              : "http://localhost:9091/transmission/rpc"
                           }
                           {...field}
                           data-testid="input-downloader-url"
                         />
                       </FormControl>
-                      {(form.watch("type") === "rtorrent" ||
-                        form.watch("type") === "qbittorrent" ||
-                        form.watch("type") === "transmission") && (
-                        <FormDescription className="text-xs">
-                          Enter hostname or IP address without protocol or port
-                        </FormDescription>
-                      )}
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {/* Show Port and SSL fields for clients that require separate port */}
                 {(form.watch("type") === "rtorrent" ||
                   form.watch("type") === "qbittorrent" ||
-                  form.watch("type") === "transmission") && (
+                  form.watch("type") === "transmission" ||
+                  form.watch("type") === "sabnzbd" ||
+                  form.watch("type") === "nzbget") && (
                   <>
                     <FormField
                       control={form.control}
@@ -530,7 +517,11 @@ export default function DownloadersPage() {
                                   ? "8080"
                                   : form.watch("type") === "transmission"
                                     ? "9091"
-                                    : "80 or 443"
+                                    : form.watch("type") === "sabnzbd"
+                                      ? "8080"
+                                      : form.watch("type") === "nzbget"
+                                        ? "6789"
+                                        : "80 or 443"
                               }
                               {...field}
                               value={field.value || ""}
@@ -546,31 +537,35 @@ export default function DownloadersPage() {
                         </FormItem>
                       )}
                     />
-                    {form.watch("type") !== "transmission" && (
-                      <FormField
-                        control={form.control}
-                        name="useSsl"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-2">
-                            <div className="space-y-0">
-                              <FormLabel className="text-sm">Use SSL</FormLabel>
-                              <FormDescription className="text-xs">
-                                {form.watch("type") === "qbittorrent"
-                                  ? "See Options -> Web UI -> 'Use HTTPS instead of HTTP' in qBittorrent"
-                                  : "Enable HTTPS"}
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Checkbox
-                                checked={!!field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid="checkbox-downloader-usessl"
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                    )}
+                    <FormField
+                      control={form.control}
+                      name="useSsl"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-2">
+                          <div className="space-y-0">
+                            <FormLabel className="text-sm">Use SSL</FormLabel>
+                            <FormDescription className="text-xs">
+                              {form.watch("type") === "qbittorrent"
+                                ? "See Options → Web UI → 'Use HTTPS instead of HTTP' in qBittorrent"
+                                : form.watch("type") === "transmission"
+                                  ? "Enable HTTPS (see Settings → Web in Transmission)"
+                                  : form.watch("type") === "sabnzbd"
+                                    ? "Enable HTTPS in SABnzbd (Config → General)"
+                                    : form.watch("type") === "nzbget"
+                                      ? "Enable HTTPS in NZBGet (Settings → Security)"
+                                      : "Enable HTTPS"}
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Checkbox
+                              checked={!!field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-downloader-usessl"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
                   </>
                 )}
                 {form.watch("type") === "rtorrent" && (
