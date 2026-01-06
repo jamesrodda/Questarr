@@ -46,15 +46,9 @@ cp .env.example .env
 # Required: IGDB API credentials (get from https://dev.twitch.tv/console)
 IGDB_CLIENT_ID=your_client_id_here
 IGDB_CLIENT_SECRET=your_client_secret_here
-
-# Optional: Server configuration
-PORT=5000
-HOST=0.0.0.0
-NODE_ENV=production
-
-# Database (already configured for Docker)
-DATABASE_URL=postgresql://postgres:password@db:5432/questarr
+JWT_SECRET=change-this-to-a-secure-random-string
 ```
+The other variables are optional, if you want to change them.
 
 1. **Build and start the containers:**
 ```bash
@@ -95,10 +89,16 @@ npm install
 
 3. **Configure environment variables in `.env`:**
 ```env
-DATABASE_URL=postgresql://user:password@localhost:5432/questarr
-IGDB_CLIENT_ID=your_client_id
-IGDB_CLIENT_SECRET=your_client_secret
-PORT=5000
+# Required: IGDB API credentials (get from https://dev.twitch.tv/console)
+IGDB_CLIENT_ID=your_client_id_here
+IGDB_CLIENT_SECRET=your_client_secret_here
+JWT_SECRET=change-this-to-a-secure-random-string
+
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=password
+POSTGRES_DB=questarr
+POSTGRES_HOST=localhost --> Point this to your DB
+POSTGRES_PORT=5432
 ```
 
 4. **Initialize the database:**
