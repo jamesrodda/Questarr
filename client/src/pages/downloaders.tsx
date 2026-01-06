@@ -305,9 +305,8 @@ export default function DownloadersPage() {
         <div>
           <h1 className="text-3xl font-bold">Downloaders</h1>
           <p className="text-muted-foreground">
-            Manage torrent and Usenet clients for automated downloads. Downloads are sent to enabled
-            clients in priority order (lowest number first), with automatic fallback if a client
-            fails.
+            Manage download clients for automated downloads. Downloads are sent to enabled clients
+            in priority order (lowest number first), with automatic fallback if a client fails.
           </p>
         </div>
         <Button onClick={handleAdd} data-testid="button-add-downloader">
@@ -408,7 +407,7 @@ export default function DownloadersPage() {
               <CardTitle>No Downloaders Configured</CardTitle>
               <CardDescription>
                 Add your first downloader client to enable automated downloads. Supported clients
-                include Transmission, rTorrent, and qBittorrent.
+                include Transmission, rTorrent, qBittorrent, SABnzbd, and NZBGet.
               </CardDescription>
             </CardHeader>
           </Card>
@@ -490,68 +489,66 @@ export default function DownloadersPage() {
 
                 <>
                   <FormField
-                      control={form.control}
-                      name="port"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Port</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              placeholder={
-                                form.watch("type") === "qbittorrent"
-                                  ? "8080"
-                                  : form.watch("type") === "transmission"
-                                    ? "9091"
-                                    : form.watch("type") === "sabnzbd"
-                                      ? "8080"
-                                      : form.watch("type") === "nzbget"
-                                        ? "6789"
-                                        : "80 or 443"
-                              }
-                              {...field}
-                              value={field.value || ""}
-                              onChange={(e) =>
-                                field.onChange(
-                                  e.target.value ? parseInt(e.target.value) : undefined
-                                )
-                              }
-                              data-testid="input-downloader-port"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="useSsl"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-2">
-                          <div className="space-y-0">
-                            <FormLabel className="text-sm">Use SSL</FormLabel>
-                            <FormDescription className="text-xs">
-                              {form.watch("type") === "qbittorrent"
-                                ? "See Options → Web UI → 'Use HTTPS instead of HTTP' in qBittorrent"
+                    control={form.control}
+                    name="port"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Port</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder={
+                              form.watch("type") === "qbittorrent"
+                                ? "8080"
                                 : form.watch("type") === "transmission"
-                                  ? "Enable HTTPS (see Settings → Web in Transmission)"
+                                  ? "9091"
                                   : form.watch("type") === "sabnzbd"
-                                    ? "Enable HTTPS in SABnzbd (Config → General)"
+                                    ? "8080"
                                     : form.watch("type") === "nzbget"
-                                      ? "Enable HTTPS in NZBGet (Settings → Security)"
-                                      : "Enable HTTPS"}
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Checkbox
-                              checked={!!field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-downloader-usessl"
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
+                                      ? "6789"
+                                      : "80 or 443"
+                            }
+                            {...field}
+                            value={field.value || ""}
+                            onChange={(e) =>
+                              field.onChange(e.target.value ? parseInt(e.target.value) : undefined)
+                            }
+                            data-testid="input-downloader-port"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="useSsl"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-2">
+                        <div className="space-y-0">
+                          <FormLabel className="text-sm">Use SSL</FormLabel>
+                          <FormDescription className="text-xs">
+                            {form.watch("type") === "qbittorrent"
+                              ? "See Options → Web UI → 'Use HTTPS instead of HTTP' in qBittorrent"
+                              : form.watch("type") === "transmission"
+                                ? "Enable HTTPS (see Settings → Web in Transmission)"
+                                : form.watch("type") === "sabnzbd"
+                                  ? "Enable HTTPS in SABnzbd (Config → General)"
+                                  : form.watch("type") === "nzbget"
+                                    ? "Enable HTTPS in NZBGet (Settings → Security)"
+                                    : "Enable HTTPS"}
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Checkbox
+                            checked={!!field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="checkbox-downloader-usessl"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
                 </>
                 {form.watch("type") === "rtorrent" && (
                   <FormField
@@ -672,10 +669,10 @@ export default function DownloadersPage() {
                         {form.watch("type") === "qbittorrent"
                           ? "Adding a category avoids conflicts with unrelated downloads"
                           : form.watch("type") === "transmission"
-                            ? "Creates a subdirectory in the output directory. Label for torrents in downloader"
+                            ? "Creates a subdirectory in the output directory. Label for downloads in downloader"
                             : form.watch("type") === "sabnzbd" || form.watch("type") === "nzbget"
                               ? "Category for NZBs in downloader"
-                              : "Label for torrents in downloader"}
+                              : "Label for downloads in downloader"}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -735,7 +732,7 @@ export default function DownloadersPage() {
                           </SelectContent>
                         </Select>
                         <FormDescription className="text-xs">
-                          Forced Torrents do not abide by seed restrictions
+                          Forced downloads do not abide by seed restrictions
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -801,7 +798,7 @@ export default function DownloadersPage() {
                               <div className="space-y-0">
                                 <FormLabel className="text-sm">Add Stopped</FormLabel>
                                 <FormDescription className="text-xs">
-                                  Add torrents in paused state
+                                  Add downloads in paused state
                                 </FormDescription>
                               </div>
                               <FormControl>
@@ -822,7 +819,7 @@ export default function DownloadersPage() {
                               <div className="space-y-0">
                                 <FormLabel className="text-sm">Remove Completed</FormLabel>
                                 <FormDescription className="text-xs">
-                                  Remove torrents from downloader after completion
+                                  Remove downloads from downloader after completion
                                 </FormDescription>
                               </div>
                               <FormControl>

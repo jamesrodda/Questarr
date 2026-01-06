@@ -156,12 +156,7 @@ export default function CalendarPage() {
       </div>
 
       <div className="flex items-center justify-between mb-6">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={navigatePrevious}
-          aria-label="Previous period"
-        >
+        <Button variant="ghost" size="icon" onClick={navigatePrevious} aria-label="Previous period">
           <ChevronLeft className="h-5 w-5" />
         </Button>
         <h2 className="text-2xl font-semibold">{getTitle()}</h2>

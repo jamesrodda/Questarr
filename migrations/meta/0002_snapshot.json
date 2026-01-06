@@ -1,6 +1,6 @@
 {
-  "id": "8129365f-715f-49c2-af15-a83eaacb51d4",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "cbac192b-065f-4221-b203-4c47ccccb48b",
+  "prevId": "1ab4d850-9fd5-4465-bc0b-b8b16d95cb72",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -147,8 +147,45 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.game_torrents": {
-      "name": "game_torrents",
+    "public.__drizzle_migrations": {
+      "name": "__drizzle_migrations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "__drizzle_migrations_hash_unique": {
+          "name": "__drizzle_migrations_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": ["hash"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.game_downloads": {
+      "name": "game_downloads",
       "schema": "",
       "columns": {
         "id": {
@@ -170,14 +207,21 @@
           "primaryKey": false,
           "notNull": true
         },
-        "torrent_hash": {
-          "name": "torrent_hash",
+        "download_type": {
+          "name": "download_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'torrent'"
+        },
+        "download_hash": {
+          "name": "download_hash",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "torrent_title": {
-          "name": "torrent_title",
+        "download_title": {
+          "name": "download_title",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -205,18 +249,18 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "game_torrents_game_id_games_id_fk": {
-          "name": "game_torrents_game_id_games_id_fk",
-          "tableFrom": "game_torrents",
+        "game_downloads_game_id_games_id_fk": {
+          "name": "game_downloads_game_id_games_id_fk",
+          "tableFrom": "game_downloads",
           "tableTo": "games",
           "columnsFrom": ["game_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "game_torrents_downloader_id_downloaders_id_fk": {
-          "name": "game_torrents_downloader_id_downloaders_id_fk",
-          "tableFrom": "game_torrents",
+        "game_downloads_downloader_id_downloaders_id_fk": {
+          "name": "game_downloads_downloader_id_downloaders_id_fk",
+          "tableFrom": "game_downloads",
           "tableTo": "downloaders",
           "columnsFrom": ["downloader_id"],
           "columnsTo": ["id"],
@@ -399,6 +443,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "protocol": {
+          "name": "protocol",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'torznab'"
         },
         "enabled": {
           "name": "enabled",
@@ -589,8 +640,8 @@
           "notNull": true,
           "default": false
         },
-        "notify_multiple_torrents": {
-          "name": "notify_multiple_torrents",
+        "notify_multiple_downloads": {
+          "name": "notify_multiple_downloads",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
