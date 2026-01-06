@@ -25,6 +25,19 @@ import { useQuery } from "@tanstack/react-query";
 import { type Game, type DownloadStatus } from "@shared/schema";
 import { FaGithub } from "react-icons/fa";
 import pkg from "../../../package.json";
+import { FaArrowUp } from "react-icons/fa";
+import { useEffect, useState } from "react";
+// Helper to fetch latest version from GitHub main branch
+function useLatestVersion() {
+  const [latest, setLatest] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("https://raw.githubusercontent.com/Doezer/Questarr/main/package.json")
+      .then((res) => res.json())
+      .then((data) => setLatest(data.version))
+      .catch(() => setLatest(null));
+  }, []);
+  return latest;
+}
 
 const staticNavigation = [
   {
@@ -83,6 +96,7 @@ interface AppSidebarProps {
 }
 
 export default function AppSidebar({ activeItem = "/", onNavigate }: AppSidebarProps) {
+  const latestVersion = useLatestVersion();
   const handleNavigation = (url: string) => {
     console.warn(`Navigation triggered: ${url}`);
     onNavigate?.(url);
@@ -192,16 +206,29 @@ export default function AppSidebar({ activeItem = "/", onNavigate }: AppSidebarP
         {/* Divider above GitHub link */}
         <div className="border-t border-[#374151]/40 mx-2 mb-2" />
         {/* GitHub link and version info at the bottom */}
-        <div className="flex items-center justify-center gap-2 pb-2 text-[#9CA3AF] text-xs">
+        <div className="flex items-center justify-center gap-2 pb-2 text-xs transition-opacity hover:opacity-70 cursor-pointer">
           <a
             href="https://github.com/Doezer/Questarr"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="View on GitHub"
-            className="flex items-center gap-1 text-[#9CA3AF] hover:text-[#3B82F6] transition-colors"
+            className={
+              latestVersion && latestVersion !== pkg.version
+              ? "flex items-center gap-1 text-emerald-400 hover:text-emerald-500 transition-colors font-semibold"
+              : "flex items-center gap-1 text-[#9CA3AF] hover:text-[#3B82F6] transition-colors"
+            }
           >
+          <span className="flex flex-col justify-center items-center">
             <FaGithub size={16} />
-            <span>Questarr v.{pkg.version}</span>
+            <span className="flex items-center gap-1">
+              <span>Questarr v.{pkg.version}</span>
+              {latestVersion && latestVersion !== pkg.version && (
+                <>
+                  <span className="ml-1 text-emerald-500/70">v{latestVersion} <FaArrowUp className="inline" size={12} /></span>
+                </>
+                ) }
+              </span>
+          </span>
           </a>
         </div>
       </SidebarContent>
