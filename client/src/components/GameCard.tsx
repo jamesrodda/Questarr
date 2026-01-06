@@ -5,7 +5,7 @@ import { Download, Info, Star, Calendar, Eye, EyeOff, PackageCheck } from "lucid
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import StatusBadge, { type GameStatus } from "./StatusBadge";
-import { type Game } from "@shared/schema";
+import { type Game, type SearchResult } from "@shared/schema";
 import { useState, memo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import GameDetailsModal from "./GameDetailsModal";
@@ -66,52 +66,34 @@ const GameCard = ({
   // Use Intersection Observer to detect when card is visible in viewport
   // This prevents making API calls for games that aren't visible on screen
   useEffect(() => {
-    const currentRef = cardRef.current;
-    if (!currentRef) return;
+    // Only observe wanted games that need release availability check
+    if (game.status === "wanted") {
+      const element = cardRef.current;
+      if (!element) return;
 
-    // Only observe wanted games that need torrent availability check
-    const shouldObserve = !isDiscovery && game.status === "wanted" && !!game.title;
-    if (!shouldObserve) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && !isVisible) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
             setIsVisible(true);
-            // Once visible, we don't need to observe anymore
             observer.disconnect();
           }
-        });
-      },
-      {
-        // Start loading slightly before the card becomes visible
-        rootMargin: "100px",
-        threshold: 0.01,
-      }
-    );
+        },
+        { threshold: 0.1 }
+      );
 
-    observer.observe(currentRef);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+  }, [game.status]);
 
-    return () => {
-      observer.disconnect();
-    };
-  }, [isDiscovery, game.status, game.title, isVisible]);
-
-  // Check for torrent availability for wanted games - only when visible
-  // This prevents hundreds of simultaneous API requests when loading a page with many wanted games
-  const { data: searchResults } = useQuery({
-    queryKey: ["/api/search", game.title],
-    queryFn: async () => {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(game.title)}&limit=1`);
-      if (!response.ok) return null;
-      return response.json();
-    },
-    enabled: !isDiscovery && game.status === "wanted" && !!game.title && isVisible,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-    refetchOnWindowFocus: false,
+  // Check for release availability for wanted games - only when visible
+  const { data: searchResults } = useQuery<SearchResult>({
+    queryKey: [`/api/search?query=${encodeURIComponent(game.title)}`],
+    enabled: isVisible && game.status === "wanted",
+    staleTime: 1000 * 60 * 60, // 1 hour
   });
 
-  const hasTorrentsAvailable = searchResults?.items && searchResults.items.length > 0;
+  const hasReleasesAvailable = searchResults?.items && searchResults.items.length > 0;
 
   const handleStatusClick = () => {
     console.warn(`Status change triggered for game: ${game.title}`);
@@ -153,7 +135,7 @@ const GameCard = ({
         />
         <div className="absolute top-2 right-2 flex flex-col gap-1">
           {!isDiscovery && game.status && <StatusBadge status={game.status} />}
-          {game.status === "wanted" && hasTorrentsAvailable && (
+          {game.status === "wanted" && hasReleasesAvailable && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Badge
