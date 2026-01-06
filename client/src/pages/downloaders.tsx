@@ -478,15 +478,7 @@ export default function DownloadersPage() {
                       <FormLabel>Host</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder={
-                            form.watch("type") === "rtorrent" ||
-                            form.watch("type") === "qbittorrent" ||
-                            form.watch("type") === "transmission" ||
-                            form.watch("type") === "sabnzbd" ||
-                            form.watch("type") === "nzbget"
-                              ? "http://localhost or https://192.168.1.100"
-                              : "http://localhost:9091/transmission/rpc"
-                          }
+                          placeholder="http://localhost or https://192.168.1.100"
                           {...field}
                           data-testid="input-downloader-url"
                         />
@@ -496,14 +488,8 @@ export default function DownloadersPage() {
                   )}
                 />
 
-                {/* Show Port and SSL fields for clients that require separate port */}
-                {(form.watch("type") === "rtorrent" ||
-                  form.watch("type") === "qbittorrent" ||
-                  form.watch("type") === "transmission" ||
-                  form.watch("type") === "sabnzbd" ||
-                  form.watch("type") === "nzbget") && (
-                  <>
-                    <FormField
+                <>
+                  <FormField
                       control={form.control}
                       name="port"
                       render={({ field }) => (
@@ -566,8 +552,7 @@ export default function DownloadersPage() {
                         </FormItem>
                       )}
                     />
-                  </>
-                )}
+                </>
                 {form.watch("type") === "rtorrent" && (
                   <FormField
                     control={form.control}
