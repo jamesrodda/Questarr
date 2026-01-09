@@ -62,10 +62,9 @@ export default function DownloadersPage() {
     queryKey: ["/api/downloaders"],
   });
 
-  const sortedDownloaders = useMemo(() => {
+  const sortedActiveDownloaders = useMemo(() => {
     return [...downloaders].sort(compareEnabledPriorityName);
   }, [downloaders]);
-  const sortedActiveDownloaders = sortedDownloaders;
 
   const addMutation = useMutation({
     mutationFn: async (data: InsertDownloader) => {
