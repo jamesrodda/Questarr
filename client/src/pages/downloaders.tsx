@@ -459,7 +459,7 @@ export default function DownloadersPage() {
                           {...field}
                           data-testid="input-downloader-name"
                         />
-                        </FormControl>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
