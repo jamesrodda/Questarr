@@ -47,7 +47,7 @@ jobs:
           tags: |
             type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
             type=raw,value=${{ inputs.environment }}-latest
-            type=sha,prefix=${{ inputs.environment }}-
+            type=sha,prefix=${{ inputs.environment }}-sha-,format=short
       
       - name: Build and push Docker image
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
@@ -75,7 +75,7 @@ jobs:
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "docker pull ghcr.io/${{ github.repository }}:${{ inputs.environment }}-latest" >> $GITHUB_STEP_SUMMARY
           echo "docker run -d -p 5000:5000 \\" >> $GITHUB_STEP_SUMMARY
-          echo "  -e DATABASE_URL=your_database_url \\" >> $GITHUB_STEP_SUMMARY
+          echo "  -e POSTGRES_PASSWORD=your_password \\" >> $GITHUB_STEP_SUMMARY
           echo "  -e IGDB_CLIENT_ID=your_client_id \\" >> $GITHUB_STEP_SUMMARY
           echo "  -e IGDB_CLIENT_SECRET=your_client_secret \\" >> $GITHUB_STEP_SUMMARY
           echo "  ghcr.io/${{ github.repository }}:${{ inputs.environment }}-latest" >> $GITHUB_STEP_SUMMARY

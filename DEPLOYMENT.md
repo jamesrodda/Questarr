@@ -44,38 +44,46 @@ docker pull ghcr.io/doezer/questarr:production-latest
 
 # Run the container
 docker run -d -p 5000:5000 \
-  -e DATABASE_URL=postgresql://user:password@host:5432/questarr \
+  -e POSTGRES_PASSWORD=password \
   -e IGDB_CLIENT_ID=your_igdb_client_id \
-  -e IGDB_CLIENT_SECRET=your_igdb_client_secret \
-  -e PORT=5000 \
-  -e HOST=0.0.0.0 \
+  -e IGDB_CLIENT_SECRET=your_igdb_client_secret
   ghcr.io/doezer/questarr:production-latest
 ```
 
 ### Using Docker Compose
 
-You can update the `docker-compose.yml` to use the deployed image:
+You can update the `docker-compose.yml` to use the deployed image. It is recommended to hardcode your configuration directly in the file to avoid reliance on `.env` files:
 
 ```yaml
 services:
   app:
     image: ghcr.io/doezer/questarr:production-latest
     ports:
-      - "${PORT}:${PORT}"
+      - "5000:5000"
     environment:
       - NODE_ENV=production
-      - PORT=${PORT}
-      - DATABASE_URL=${DATABASE_URL}
-      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID}
-      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
+      - PORT=5000
       - HOST=0.0.0.0
+      - POSTGRES_HOST=db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=<your_password>
+      - POSTGRES_DB=questarr
+      - IGDB_CLIENT_ID=<your_igdb_client_id>
+      - IGDB_CLIENT_SECRET=<your_igdb_client_secret>
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
   
   db:
     image: postgres:16-alpine
-    # ... rest of the configuration
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=<your_password>
+      - POSTGRES_DB=questarr
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
 ```
 
 ## Environment Variables
@@ -84,9 +92,14 @@ The following environment variables are required:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `POSTGRES_HOST` | Database host | Yes |
+| `POSTGRES_USER` | Database user | Yes |
+| `POSTGRES_PASSWORD` | Database password | Yes |
+| `POSTGRES_DB` | Database name | Yes |
 | `IGDB_CLIENT_ID` | IGDB API client ID | Yes |
 | `IGDB_CLIENT_SECRET` | IGDB API client secret | Yes |
+| `JWT_SECRET` | JWT signing secret | No (Auto-generated in DB) |
+| `DATABASE_URL` | PostgreSQL connection string (Legacy alternative) | No |
 | `PORT` | Port to run the application on | No (default: 5000) |
 | `HOST` | Host interface to bind to | No (default: localhost, use 0.0.0.0 for Docker) |
 | `NODE_ENV` | Node environment | No (default: production) |
@@ -95,11 +108,7 @@ The following environment variables are required:
 
 ### Container Registry (GHCR)
 
-The workflow automatically pushes images to GitHub Container Registry. Images are public by default.
-
-To make images private:
-1. Go to Package settings in GitHub
-2. Change visibility to private
+The workflow pushes images to GitHub Container Registry manually. Images are public by default.
 
 ### Cloud Deployment Options
 

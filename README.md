@@ -36,21 +36,15 @@ git clone https://github.com/Doezer/Questarr.git
 cd Questarr
 ```
 
-2. **Create environment file:**
-```bash
-cp .env.example .env
+2. **Configure the application:**
+Edit `docker-compose.yml` directly and fill in your IGDB credentials in the `environment` section:
+```yaml
+      - IGDB_CLIENT_ID=<your_client_id>
+      - IGDB_CLIENT_SECRET=<your_client_secret>
 ```
+The other variables are optional, if you want to change them. `JWT_SECRET` is automatically generated and stored in your database on first run.
 
-3. **Configure environment variables in `.env`:**
-```env
-# Required: IGDB API credentials (get from https://dev.twitch.tv/console)
-IGDB_CLIENT_ID=your_client_id_here
-IGDB_CLIENT_SECRET=your_client_secret_here
-JWT_SECRET=change-this-to-a-secure-random-string
-```
-The other variables are optional, if you want to change them.
-
-1. **Build and start the containers:**
+3. **Build and start the containers:**
 ```bash
 docker-compose up -d
 ```
